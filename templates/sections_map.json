@@ -1,0 +1,65 @@
+{
+  "section_mappings": {
+    "CONTACT": ["contact", "contact_info", "personal_information"],
+    "CAREER SUMMARY": ["career_summary", "professional_summary", "summary", "objective"],
+    "PROFESSIONAL SUMMARY": ["career_summary", "professional_summary", "summary"],
+    "SUMMARY": ["career_summary", "summary", "professional_summary"],
+    "SKILLS": ["skills", "technical_skills", "core_competencies", "competencies"],
+    "TECHNICAL SKILLS": ["skills", "technical_skills", "technologies"],
+    "CORE COMPETENCIES": ["skills", "competencies", "core_skills"],
+    "EXPERIENCE": ["experience", "work_experience", "professional_experience"],
+    "WORK EXPERIENCE": ["experience", "work_experience"],
+    "PROFESSIONAL EXPERIENCE": ["experience", "professional_experience"],
+    "EDUCATION": ["education", "academic_background", "qualifications"],
+    "ACADEMIC BACKGROUND": ["education", "academic_background"],
+    "CERTIFICATIONS": ["certifications", "certificates", "professional_certifications"],
+    "PROJECTS": ["projects", "key_projects", "notable_projects"],
+    "ACHIEVEMENTS": ["achievements", "accomplishments", "awards"]
+  },
+  
+  "style_variants": {
+    "professional": {
+      "bullet_style": "•",
+      "heading_format": "ALL_CAPS",
+      "emphasis": "**bold**"
+    },
+    "modern": {
+      "bullet_style": "→",
+      "heading_format": "Title_Case",
+      "emphasis": "*italic*"
+    },
+    "classic": {
+      "bullet_style": "-",
+      "heading_format": "ALL_CAPS",
+      "emphasis": "**BOLD**"
+    }
+  },
+  
+  "template_sections": {
+    "minimal": ["contact", "summary", "experience", "skills", "education"],
+    "standard": ["contact", "summary", "skills", "experience", "education", "certifications"],
+    "comprehensive": ["contact", "summary", "skills", "experience", "projects", "education", "certifications", "achievements"]
+  },
+  
+  "formatting_rules": {
+    "contact_formats": {
+      "horizontal": "email • phone • location • linkedin",
+      "vertical": "email\nphone\nlocation\nlinkedin",
+      "block": "Email: email\nPhone: phone\nLocation: location\nLinkedIn: linkedin"
+    },
+    "date_formats": {
+      "MM/YYYY - MM/YYYY": "01/2020 - 12/2023",
+      "Mon YYYY - Mon YYYY": "Jan 2020 - Dec 2023", 
+      "YYYY-YYYY": "2020-2023",
+      "MM.YYYY - MM.YYYY": "01.2020 - 12.2023"
+    },
+    "bullet_styles": {
+      "•": "round bullet",
+      "○": "hollow bullet", 
+      "→": "arrow",
+      "-": "dash",
+      "*": "asterisk",
+      "▪": "square bullet"
+    }
+  }
+}
