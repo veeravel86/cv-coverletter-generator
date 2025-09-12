@@ -247,6 +247,29 @@ def handle_generation(generation_mode):
     retriever = create_rag_retriever(st.session_state.vector_store)
     context_builder = ContextBuilder(retriever)
     
+    # New individual generation options
+    st.markdown("---")
+    st.subheader("🎯 Individual Content Generation")
+    st.markdown("Generate specific components for targeted CV customization")
+    
+    gen_cols = st.columns(2)
+    
+    with gen_cols[0]:
+        if st.button("🛠️ Generate Top 10 Skills", help="Extract and rank the top 10 most relevant skills"):
+            generate_top_skills(llm_service, context_builder)
+        
+        if st.button("💼 Generate Top 8 Experience Bullets", help="Create 8 high-impact experience bullets"):
+            generate_experience_bullets(llm_service, context_builder)
+    
+    with gen_cols[1]:
+        if st.button("📊 Generate Executive Summary", help="Create a professional executive summary"):
+            generate_executive_summary(llm_service, context_builder)
+        
+        if st.button("📋 Generate Previous Experience Summary", help="Summarize previous work experience"):
+            generate_previous_experience_summary(llm_service, context_builder)
+    
+    # Original generation section
+    st.markdown("---")
     col1, col2 = st.columns([2, 1])
     
     with col2:
@@ -264,9 +287,9 @@ def handle_generation(generation_mode):
     
     with col1:
         if generation_mode in ["CV Package", "Both"]:
-            st.subheader("📄 CV Package Generation")
+            st.subheader("📄 Complete CV Package Generation")
             
-            if st.button("🚀 Generate CV Package", type="primary"):
+            if st.button("🚀 Generate Full CV Package", type="primary"):
                 generate_cv_package(llm_service, context_builder, auto_retry, max_retries, context_preview)
         
         if generation_mode in ["Cover Letter", "Both"]:
@@ -726,6 +749,184 @@ def format_content_with_structure(content: str, doc_type: str) -> str:
             formatted_lines.append(line)
     
     return '\n'.join(formatted_lines)
+
+def generate_top_skills(llm_service, context_builder):
+    """Generate top 10 skills with expandable display"""
+    
+    with st.spinner("🛠️ Generating top 10 skills..."):
+        try:
+            # Get relevant context from vector store
+            context = context_builder.build_context("skills technical competencies expertise")
+            
+            prompt = f"""
+Based on the following context, extract and rank the top 10 most relevant and marketable skills.
+
+Context:
+{context}
+
+Requirements:
+- Extract exactly 10 skills
+- Each skill should be 1-3 words maximum
+- Prioritize technical skills and in-demand competencies
+- Include both hard and soft skills where relevant
+- Format as a numbered list
+- Consider current market demand and relevance
+
+Return format:
+1. Skill Name
+2. Skill Name
+...
+10. Skill Name
+"""
+            
+            response = llm_service.generate_content(prompt, max_tokens=500)
+            
+            # Store in session state
+            if 'individual_generations' not in st.session_state:
+                st.session_state.individual_generations = {}
+            st.session_state.individual_generations['top_skills'] = response
+            
+            # Display with expander
+            with st.expander("🛠️ Top 10 Skills - Click to expand", expanded=True):
+                st.markdown("### Generated Skills")
+                st.write(response)
+                st.caption("💡 These skills were extracted from your documents and ranked by relevance")
+            
+        except Exception as e:
+            st.error(f"❌ Error generating skills: {str(e)}")
+
+def generate_experience_bullets(llm_service, context_builder):
+    """Generate top 8 experience bullets with expandable display"""
+    
+    with st.spinner("💼 Generating top 8 experience bullets..."):
+        try:
+            # Get relevant context from vector store
+            context = context_builder.build_context("work experience achievements projects accomplishments")
+            
+            prompt = f"""
+Based on the following context, create exactly 8 high-impact experience bullet points using the SAR (Situation, Action, Result) format.
+
+Context:
+{context}
+
+Requirements:
+- Exactly 8 bullets
+- Each bullet should follow: **Two-Word Header**: Description with quantified results
+- Include specific numbers, percentages, or metrics where possible
+- Use strong action verbs
+- Focus on achievements and impact, not just responsibilities
+- Each bullet should be 1-2 lines maximum
+- Prioritize the most impressive and relevant accomplishments
+
+Format example:
+• **Strategic Planning**: Led cross-functional team of 12 to develop new product strategy, resulting in 25% revenue increase
+• **Process Optimization**: Implemented automated workflow reducing processing time by 40% and improving accuracy to 98%
+
+Return exactly 8 bullets in this format.
+"""
+            
+            response = llm_service.generate_content(prompt, max_tokens=800)
+            
+            # Store in session state
+            if 'individual_generations' not in st.session_state:
+                st.session_state.individual_generations = {}
+            st.session_state.individual_generations['experience_bullets'] = response
+            
+            # Display with expander
+            with st.expander("💼 Top 8 Experience Bullets - Click to expand", expanded=True):
+                st.markdown("### Generated Experience Bullets")
+                st.markdown(response)
+                st.caption("🎯 High-impact bullets with quantified achievements using SAR format")
+            
+        except Exception as e:
+            st.error(f"❌ Error generating experience bullets: {str(e)}")
+
+def generate_executive_summary(llm_service, context_builder):
+    """Generate executive summary with expandable display"""
+    
+    with st.spinner("📊 Generating executive summary..."):
+        try:
+            # Get relevant context from vector store
+            context = context_builder.build_context("professional summary career objective experience background")
+            
+            prompt = f"""
+Based on the following context, create a powerful executive summary (30-40 words maximum).
+
+Context:
+{context}
+
+Requirements:
+- Maximum 40 words
+- Executive-level, results-oriented tone
+- Highlight key value proposition and expertise
+- Include years of experience if apparent
+- Use impactful, professional language
+- No first-person pronouns
+- Focus on what you bring to an organization
+- Include industry or functional expertise
+
+The summary should capture the essence of a senior professional's career value.
+"""
+            
+            response = llm_service.generate_content(prompt, max_tokens=200)
+            
+            # Store in session state
+            if 'individual_generations' not in st.session_state:
+                st.session_state.individual_generations = {}
+            st.session_state.individual_generations['executive_summary'] = response
+            
+            # Display with expander
+            with st.expander("📊 Executive Summary - Click to expand", expanded=True):
+                st.markdown("### Generated Executive Summary")
+                st.markdown(f"*{response.strip()}*")
+                word_count = len(response.split())
+                st.caption(f"📝 Word count: {word_count} words (target: ≤40 words)")
+            
+        except Exception as e:
+            st.error(f"❌ Error generating executive summary: {str(e)}")
+
+def generate_previous_experience_summary(llm_service, context_builder):
+    """Generate previous experience summary with expandable display"""
+    
+    with st.spinner("📋 Generating previous experience summary..."):
+        try:
+            # Get relevant context from vector store
+            context = context_builder.build_context("previous roles work history career progression past positions")
+            
+            prompt = f"""
+Based on the following context, create a comprehensive summary of previous work experience.
+
+Context:
+{context}
+
+Requirements:
+- Summarize previous roles and positions chronologically
+- Include key companies, job titles, and time periods where available
+- Highlight major achievements and responsibilities for each role
+- Use 3-5 bullet points per significant role
+- Focus on career progression and skill development
+- Include quantified achievements where possible
+- Professional tone and clear formatting
+- Group similar or related roles together if needed
+
+Format as a structured summary with clear role sections.
+"""
+            
+            response = llm_service.generate_content(prompt, max_tokens=1000)
+            
+            # Store in session state
+            if 'individual_generations' not in st.session_state:
+                st.session_state.individual_generations = {}
+            st.session_state.individual_generations['previous_experience'] = response
+            
+            # Display with expander
+            with st.expander("📋 Previous Experience Summary - Click to expand", expanded=True):
+                st.markdown("### Generated Previous Experience Summary")
+                st.markdown(response)
+                st.caption("🏢 Comprehensive overview of career progression and key roles")
+            
+        except Exception as e:
+            st.error(f"❌ Error generating previous experience summary: {str(e)}")
 
 if __name__ == "__main__":
     main()
