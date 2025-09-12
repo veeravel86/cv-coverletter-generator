@@ -113,7 +113,7 @@ def handle_document_upload():
             help="The target job description you're applying for"
         )
         
-        st.subheader("💼 Experience Document") 
+        st.subheader("💼 Experience Superset") 
         experience_doc = st.file_uploader(
             "Upload Experience Superset PDF",
             type=['pdf'],
@@ -122,7 +122,7 @@ def handle_document_upload():
         )
     
     with col2:
-        st.subheader("🛠️ Skills Document")
+        st.subheader("🛠️ Skills Superset")
         skills_doc = st.file_uploader(
             "Upload Skills Superset PDF",
             type=['pdf'],
@@ -140,7 +140,7 @@ def handle_document_upload():
     
     # Show upload status
     uploaded_files = [job_description, experience_doc, skills_doc, sample_cv]
-    file_names = ["Job Description", "Experience Document", "Skills Document", "Sample CV"]
+    file_names = ["Job Description", "Experience Superset", "Skills Superset", "Sample CV"]
     
     st.markdown("### Upload Status:")
     upload_cols = st.columns(4)
@@ -678,8 +678,8 @@ def display_extracted_content(processed_data):
     processed_texts = processed_data.get("processed_texts", {})
     document_titles = {
         "job_description": "🎯 Job Description (Cleaned)",
-        "experience_doc": "💼 Experience Document",
-        "skills_doc": "🛠️ Skills Document", 
+        "experience_doc": "💼 Experience Superset",
+        "skills_doc": "🛠️ Skills Superset", 
         "sample_cv": "📋 Sample CV"
     }
     

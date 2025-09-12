@@ -4,7 +4,7 @@ A complete Streamlit + LangChain application that generates ATS-optimized CV pac
 
 ## 🎯 Features
 
-- **PDF Processing**: Upload and parse four PDFs (Job Description, Experience Document, Skills Document, Sample CV)
+- **PDF Processing**: Upload and parse four PDFs (Job Description, Experience Superset, Skills Superset, Sample CV)
 - **RAG-Powered Generation**: Uses FAISS vector store and HuggingFace embeddings for context-aware content generation
 - **CV Package Generation**: Creates career summary (≤40 words), exactly 8 SAR bullets with two-word headings, and 10 skills (≤2 words each)
 - **Cover Letter Generation**: Generates ATS-optimized cover letters (3-4 paragraphs, ≤250 words)
@@ -80,8 +80,8 @@ cv-coverletter-streamlit/
 ### Step 1: Upload Documents
 Upload four required PDFs:
 1. **Job Description PDF**: Target job posting you're applying for
-2. **Experience Document PDF**: Comprehensive document containing all your work experience and achievements
-3. **Skills Document PDF**: Document containing all your technical and soft skills
+2. **Experience Superset PDF**: Comprehensive document containing all your work experience and achievements
+3. **Skills Superset PDF**: Document containing all your technical and soft skills
 4. **Sample CV PDF**: CV whose formatting style you want to mimic
 
 ### Step 2: Generate Content
