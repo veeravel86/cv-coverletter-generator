@@ -144,10 +144,14 @@ def handle_document_upload():
                 st.session_state.processed_documents = processed_data
                 st.session_state.vector_store = processed_data["vector_store"]
                 
-                style_extractor = get_style_extractor()
-                sample_text = processed_data["processed_texts"]["sample_cv"]
-                style_profile = style_extractor.extract_style_from_text(sample_text)
-                st.session_state.style_profile = style_profile
+                # Only extract style if sample CV was uploaded
+                if "sample_cv" in processed_data["processed_texts"]:
+                    style_extractor = get_style_extractor()
+                    sample_text = processed_data["processed_texts"]["sample_cv"]
+                    style_profile = style_extractor.extract_style_from_text(sample_text)
+                    st.session_state.style_profile = style_profile
+                else:
+                    st.session_state.style_profile = None
                 
                 st.success(f"✅ Processed {processed_data['doc_count']} documents successfully!")
                 
