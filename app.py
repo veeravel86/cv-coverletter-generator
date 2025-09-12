@@ -756,10 +756,16 @@ def generate_top_skills(llm_service, context_builder):
     with st.spinner("🛠️ Generating top 10 skills..."):
         try:
             # Get job description context
-            job_context = context_builder.build_context("job description requirements responsibilities qualifications skills")
+            job_context = context_builder.retriever.get_jd_specific_context([
+                "job description requirements responsibilities qualifications skills",
+                "technical skills competencies requirements",
+                "qualifications experience needed"
+            ])["context"]
             
             # Get experience superset context
-            experience_context = context_builder.build_context("skills technical competencies expertise experience achievements")
+            experience_context = context_builder.retriever.get_superset_context(
+                "skills technical competencies expertise experience achievements"
+            )["context"]
             
             prompt = f"""You are an expert CV writer and ATS optimizer for senior engineering leadership roles.
 Read two attached input files (PDFs):
@@ -837,10 +843,16 @@ def generate_experience_bullets(llm_service, context_builder):
     with st.spinner("💼 Generating top 8 experience bullets..."):
         try:
             # Get job description context
-            job_context = context_builder.build_context("job description requirements responsibilities qualifications")
+            job_context = context_builder.retriever.get_jd_specific_context([
+                "job description requirements responsibilities qualifications",
+                "job requirements duties role expectations",
+                "skills experience needed preferred"
+            ])["context"]
             
             # Get experience context  
-            experience_context = context_builder.build_context("work experience achievements projects accomplishments results")
+            experience_context = context_builder.retriever.get_superset_context(
+                "work experience achievements projects accomplishments results"
+            )["context"]
             
             prompt = f"""You are an expert CV writer and ATS optimizer for senior engineering leadership roles. Read the below mentioned guidelines and accomplish the task from attached files.
 
@@ -926,10 +938,16 @@ def generate_executive_summary(llm_service, context_builder):
     with st.spinner("📊 Generating executive summary..."):
         try:
             # Get job description context
-            job_context = context_builder.build_context("job description requirements responsibilities qualifications leadership")
+            job_context = context_builder.retriever.get_jd_specific_context([
+                "job description requirements responsibilities qualifications leadership",
+                "job requirements duties role expectations",
+                "qualifications experience needed preferred"
+            ])["context"]
             
             # Get experience superset context
-            experience_context = context_builder.build_context("professional summary career experience background achievements leadership")
+            experience_context = context_builder.retriever.get_superset_context(
+                "professional summary career experience background achievements leadership"
+            )["context"]
             
             prompt = f"""You are an expert CV writer and ATS optimizer for senior engineering leadership roles.
 
