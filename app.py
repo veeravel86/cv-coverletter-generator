@@ -750,6 +750,45 @@ def format_content_with_structure(content: str, doc_type: str) -> str:
     
     return '\n'.join(formatted_lines)
 
+def clean_generated_content(content: str) -> str:
+    """Clean generated content to ensure only headings are bold"""
+    
+    if not content:
+        return ""
+    
+    lines = content.split('\n')
+    cleaned_lines = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            cleaned_lines.append("")
+            continue
+        
+        # Check if this is a heading (starts with **Two Word Heading** pattern or similar)
+        if line.startswith('**') and '**' in line[2:]:
+            # This is likely a heading - keep the bold formatting for headings only
+            heading_end = line.find('**', 2)
+            if heading_end != -1:
+                heading = line[2:heading_end]
+                rest = line[heading_end + 2:]
+                
+                # Only keep bold for short headings (likely section headers)
+                if len(heading.split()) <= 3:  # Headings are typically 1-3 words
+                    cleaned_lines.append(f"**{heading}**{rest}")
+                else:
+                    # Remove bold from longer content
+                    cleaned_lines.append(f"{heading}{rest}")
+            else:
+                # Malformed bold - remove it
+                cleaned_lines.append(line.replace('**', ''))
+        else:
+            # Remove any remaining bold formatting from non-heading content
+            cleaned_line = line.replace('**', '')
+            cleaned_lines.append(cleaned_line)
+    
+    return '\n'.join(cleaned_lines)
+
 def generate_top_skills(llm_service, context_builder):
     """Generate top 10 skills with expandable display using professional ATS-optimized prompt"""
     
@@ -926,7 +965,9 @@ BEGIN."""
                 st.markdown("### Generated Experience Bullets")
                 st.markdown("*ATS-optimized bullets aligned with job requirements and prioritized by relevance*")
                 st.markdown("---")
-                st.markdown(response)
+                # Clean content to ensure only headings are bold
+                cleaned_response = clean_generated_content(response)
+                st.markdown(cleaned_response)
                 st.caption("🎯 Professional SAR-format bullets optimized for ATS and hiring managers")
             
         except Exception as e:
@@ -1010,8 +1051,8 @@ BEGIN."""
                 st.markdown("### Generated Career Summary")
                 st.markdown("*Executive-level summary aligned with JD requirements and optimized for ATS*")
                 st.markdown("---")
-                # Display the summary in a highlighted box
-                st.info(f"**{response.strip()}**")
+                # Display the summary in a highlighted box (no additional bold formatting)
+                st.info(response.strip())
                 word_count = len(response.strip().split())
                 st.caption(f"📊 Word count: {word_count} words (target: ≤40 words) | 🎯 CTO-level executive tone")
             
@@ -1092,7 +1133,9 @@ Do not include the current/most recent position in this summary.
                 st.markdown("### Generated Previous Experience Summary")
                 st.markdown("*Extracted from Sample CV - Previous roles only (excluding current position)*")
                 st.markdown("---")
-                st.markdown(response)
+                # Clean content to ensure only headings are bold
+                cleaned_response = clean_generated_content(response)
+                st.markdown(cleaned_response)
                 st.caption("🏢 Career progression overview from Sample CV (past roles only)")
             
         except Exception as e:
