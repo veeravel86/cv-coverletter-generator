@@ -14,7 +14,7 @@ class SkillsGenerationConfig:
     max_words_per_skill: int = 2
     temperature: float = 0.1
     max_tokens: int = 1000
-    model: str = "gpt-4o-mini"
+    model: str = "gpt-4o-mini"  # Can be gpt-4o-mini, gpt-4o, or gpt-5
 
 class SkillsGenerator:
     def __init__(self, config: SkillsGenerationConfig = None):

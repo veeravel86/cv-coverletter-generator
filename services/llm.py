@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 class ModelType(Enum):
     GPT_4O_MINI = "gpt-4o-mini"
     GPT_4O = "gpt-4o"
+    GPT_5 = "gpt-5"
 
 @dataclass
 class LLMConfig:
@@ -294,9 +295,9 @@ def create_llm_service(model_choice: str):
 def get_llm_service():
     model_choice = st.sidebar.selectbox(
         "Select Model",
-        options=[ModelType.GPT_4O_MINI.value, ModelType.GPT_4O.value],
+        options=[ModelType.GPT_4O_MINI.value, ModelType.GPT_4O.value, ModelType.GPT_5.value],
         index=0,
-        help="gpt-4o-mini is faster and cheaper, gpt-4o is higher quality"
+        help="gpt-4o-mini is fastest and cheapest, gpt-4o is high quality, gpt-5 is the most advanced"
     )
     
     return create_llm_service(model_choice)

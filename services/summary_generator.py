@@ -14,7 +14,7 @@ class SummaryGenerationConfig:
     max_words: int = 30
     temperature: float = 0.1
     max_tokens: int = 300
-    model: str = "gpt-4o-mini"
+    model: str = "gpt-4o-mini"  # Can be gpt-4o-mini, gpt-4o, or gpt-5
 
 @dataclass 
 class ProfessionalSummary:

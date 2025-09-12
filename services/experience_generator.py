@@ -16,7 +16,7 @@ class ExperienceGenerationConfig:
     max_words_per_bullet: int = 35
     temperature: float = 0.1
     max_tokens: int = 1500
-    model: str = "gpt-4o-mini"
+    model: str = "gpt-4o-mini"  # Can be gpt-4o-mini, gpt-4o, or gpt-5
 
 @dataclass
 class ExperienceBullet:
