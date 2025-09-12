@@ -131,7 +131,7 @@ def handle_document_upload():
                 st.session_state.vector_store = processed_data["vector_store"]
                 
                 style_extractor = get_style_extractor()
-                sample_text = processed_data["texts"]["sample_cv"]
+                sample_text = processed_data["processed_texts"]["sample_cv"]
                 style_profile = style_extractor.extract_style_from_text(sample_text)
                 st.session_state.style_profile = style_profile
                 
@@ -141,24 +141,37 @@ def handle_document_upload():
                 with col1:
                     st.metric("Total Chunks", len(processed_data["documents"]))
                 with col2:
-                    doc_summary = ingestor.get_document_summary(processed_data["texts"])
+                    doc_summary = ingestor.get_document_summary(processed_data["processed_texts"])
                     total_words = sum(doc_summary.values())
                     st.metric("Total Words", f"{total_words:,}")
                 with col3:
                     st.metric("Vector Embeddings", len(processed_data["documents"]))
                 
-                # Display extracted job description
+                # Display cleaned job description
                 st.divider()
-                st.subheader("📄 Extracted Job Description")
-                jd_text = processed_data["texts"].get("job_description", "")
-                if jd_text:
+                st.subheader("📄 Cleaned Job Description")
+                
+                # Show the LLM-cleaned version
+                cleaned_jd = processed_data["processed_texts"].get("job_description", "")
+                if cleaned_jd:
                     st.text_area(
-                        "Job Description Content",
-                        jd_text,
+                        "Job Description Content (Cleaned by AI)",
+                        cleaned_jd,
                         height=300,
-                        help="This is the text extracted from your uploaded job description PDF"
+                        help="This is the cleaned job description content extracted by AI, removing LinkedIn elements and irrelevant content"
                     )
-                    st.info(f"📊 Job Description: {len(jd_text.split())} words, {len(jd_text)} characters")
+                    st.info(f"📊 Cleaned Job Description: {len(cleaned_jd.split())} words, {len(cleaned_jd)} characters")
+                    
+                    # Option to view original raw text
+                    with st.expander("🔍 View Original Raw PDF Text"):
+                        raw_jd = processed_data["texts"].get("job_description", "")
+                        st.text_area(
+                            "Original Raw Text",
+                            raw_jd,
+                            height=200,
+                            help="This is the original text extracted directly from the PDF"
+                        )
+                        st.caption(f"Raw text: {len(raw_jd.split())} words, {len(raw_jd)} characters")
                 else:
                     st.warning("No job description text was extracted")
                 
