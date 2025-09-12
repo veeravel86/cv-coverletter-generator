@@ -152,8 +152,8 @@ def handle_document_upload():
                 st.error(f"❌ {name}")
     
     if st.button("🔄 Process Documents", type="primary"):
-        if not all(uploaded_files):
-            st.error("❌ Please upload all four PDF files")
+        if not any(uploaded_files):
+            st.error("❌ Please upload at least one PDF file")
             return
         
         with st.spinner("Processing documents..."):
@@ -171,13 +171,22 @@ def handle_document_upload():
                 st.session_state.processed_documents = processed_data
                 st.session_state.vector_store = processed_data["vector_store"]
                 
-                style_extractor = get_style_extractor()
-                sample_text = processed_data["texts"]["sample_cv"]
-                style_profile = style_extractor.extract_style_from_text(sample_text)
-                st.session_state.style_profile = style_profile
+                # Extract style profile only if sample CV is available
+                if "sample_cv" in processed_data["texts"]:
+                    style_extractor = get_style_extractor()
+                    sample_text = processed_data["texts"]["sample_cv"]
+                    style_profile = style_extractor.extract_style_from_text(sample_text)
+                    st.session_state.style_profile = style_profile
                 
                 st.success(f"✅ Processed {processed_data['doc_count']} documents successfully!")
                 
+                # Show extracted content with progressive disclosure
+                st.markdown("---")
+                st.subheader("📄 Extracted Content Preview")
+                
+                display_extracted_content(processed_data)
+                
+                st.markdown("---")
                 st.subheader("📈 Processing Summary")
                 col1, col2, col3 = st.columns(3)
                 
@@ -192,8 +201,11 @@ def handle_document_upload():
                 with col3:
                     st.metric("Vector Embeddings", len(processed_data["documents"]))
                 
-                with st.expander("📋 Style Profile Detected"):
-                    st.code(style_extractor.get_style_summary(style_profile))
+                # Show style profile only if available
+                if st.session_state.get('style_profile'):
+                    with st.expander("📋 Style Profile Detected"):
+                        style_extractor = get_style_extractor()
+                        st.code(style_extractor.get_style_summary(st.session_state.style_profile))
                 
             except Exception as e:
                 error_msg = str(e)
@@ -659,6 +671,61 @@ def load_prompt5(company_name=None, role_title=None):
         prompt = prompt.replace("[ROLE_TITLE]", role_title)
     
     return prompt
+
+def display_extracted_content(processed_data):
+    """Display extracted content with progressive disclosure"""
+    
+    processed_texts = processed_data.get("processed_texts", {})
+    document_titles = {
+        "job_description": "🎯 Job Description (Cleaned)",
+        "experience_doc": "💼 Experience Document",
+        "skills_doc": "🛠️ Skills Document", 
+        "sample_cv": "📋 Sample CV"
+    }
+    
+    for doc_type, content in processed_texts.items():
+        if content and content.strip():
+            title = document_titles.get(doc_type, doc_type.replace('_', ' ').title())
+            
+            with st.expander(f"{title} - Click to expand", expanded=False):
+                # Format content with proper structure
+                formatted_content = format_content_with_structure(content, doc_type)
+                st.markdown(formatted_content)
+                
+                # Show word count
+                word_count = len(content.split())
+                st.caption(f"📊 Word count: {word_count:,} words")
+
+def format_content_with_structure(content: str, doc_type: str) -> str:
+    """Format content with proper headings and bullet points"""
+    
+    lines = content.split('\n')
+    formatted_lines = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            formatted_lines.append("")
+            continue
+            
+        # Detect headings (all caps, short lines, or specific patterns)
+        if (line.isupper() and len(line) < 50 and not line.startswith('•')) or \
+           line.endswith(':') or \
+           any(header in line.upper() for header in ['EXPERIENCE', 'SKILLS', 'EDUCATION', 'SUMMARY', 'OBJECTIVE', 'REQUIREMENTS', 'RESPONSIBILITIES', 'QUALIFICATIONS']):
+            # Format as heading
+            formatted_lines.append(f"### {line}")
+        elif line.startswith('•') or line.startswith('-') or line.startswith('*'):
+            # Format as bullet point
+            clean_line = line.lstrip('•-* ').strip()
+            formatted_lines.append(f"• {clean_line}")
+        elif line and not line.startswith(' ') and len(line.split()) < 10:
+            # Potential subheading
+            formatted_lines.append(f"**{line}**")
+        else:
+            # Regular content
+            formatted_lines.append(line)
+    
+    return '\n'.join(formatted_lines)
 
 if __name__ == "__main__":
     main()
