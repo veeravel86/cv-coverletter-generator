@@ -1001,33 +1001,68 @@ BEGIN."""
             st.error(f"❌ Error generating executive summary: {str(e)}")
 
 def generate_previous_experience_summary(llm_service, context_builder):
-    """Generate previous experience summary with expandable display"""
+    """Generate previous experience summary by parsing sample CV and extracting only past experiences"""
     
     with st.spinner("📋 Generating previous experience summary..."):
         try:
-            # Get relevant context from vector store
-            context = context_builder.build_context("previous roles work history career progression past positions")
+            # Check if sample CV is available
+            if 'sample_cv_content' not in st.session_state or not st.session_state.sample_cv_content:
+                st.warning("⚠️ Sample CV not available. Please upload a Sample CV to generate previous experience summary.")
+                return
             
-            prompt = f"""
-Based on the following context, create a comprehensive summary of previous work experience.
+            # Get sample CV content for experience extraction
+            sample_cv_content = st.session_state.sample_cv_content
+            
+            # First LLM call to extract and parse experience sections from sample CV
+            extraction_prompt = f"""
+You are an expert CV parser. Extract ONLY the work experience/employment history section from the following CV content.
 
-Context:
-{context}
+CV CONTENT:
+{sample_cv_content}
 
-Requirements:
-- Summarize previous roles and positions chronologically
-- Include key companies, job titles, and time periods where available
-- Highlight major achievements and responsibilities for each role
-- Use 3-5 bullet points per significant role
+GOAL:
+- Identify and extract the complete work experience/employment history section
+- Include all job titles, company names, dates, and descriptions
+- Maintain the original structure and formatting
+- Extract everything related to professional work experience
+
+OUTPUT FORMAT:
+Return only the work experience section content, maintaining original structure.
+"""
+            
+            extracted_experience = llm_service.generate_content(extraction_prompt, max_tokens=1500)
+            
+            # Second LLM call to identify and summarize only previous (non-current) roles
+            summary_prompt = f"""
+You are an expert CV writer. From the following work experience content, identify and summarize ONLY the PREVIOUS/PAST roles, excluding the current/most recent position.
+
+WORK EXPERIENCE CONTENT:
+{extracted_experience}
+
+GOAL:
+Create a comprehensive summary of PREVIOUS work experience only:
+- Exclude the current/most recent role (usually the first/top entry)
+- Focus on past positions and career progression leading up to current role
+- Summarize each previous role with key achievements and responsibilities
+- Include company names, job titles, and time periods where available
+- Show career progression and skill development over time
+
+REQUIREMENTS:
+- Summarize previous roles chronologically (most recent previous role first)
+- Include key companies, job titles, and time periods for each past role
+- Highlight major achievements and responsibilities for each previous position
+- Use 2-4 bullet points per significant previous role
 - Focus on career progression and skill development
 - Include quantified achievements where possible
 - Professional tone and clear formatting
-- Group similar or related roles together if needed
+- Group similar or related previous roles together if needed
 
-Format as a structured summary with clear role sections.
+OUTPUT FORMAT:
+Format as a structured summary with clear sections for each previous role.
+Do not include the current/most recent position in this summary.
 """
             
-            response = llm_service.generate_content(prompt, max_tokens=1000)
+            response = llm_service.generate_content(summary_prompt, max_tokens=1000)
             
             # Store in session state
             if 'individual_generations' not in st.session_state:
@@ -1037,8 +1072,10 @@ Format as a structured summary with clear role sections.
             # Display with expander
             with st.expander("📋 Previous Experience Summary - Click to expand", expanded=True):
                 st.markdown("### Generated Previous Experience Summary")
+                st.markdown("*Extracted from Sample CV - Previous roles only (excluding current position)*")
+                st.markdown("---")
                 st.markdown(response)
-                st.caption("🏢 Comprehensive overview of career progression and key roles")
+                st.caption("🏢 Career progression overview from Sample CV (past roles only)")
             
         except Exception as e:
             st.error(f"❌ Error generating previous experience summary: {str(e)}")
