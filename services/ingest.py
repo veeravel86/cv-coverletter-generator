@@ -105,9 +105,17 @@ Raw text to process:
         """Use LLM to structure sample CV content with proper headings"""
         try:
             prompt = """
-You are given text extracted from a sample CV PDF. Please restructure this content with proper headings and clean formatting.
+CRITICAL INSTRUCTIONS: You are a formatting assistant. Your ONLY job is to organize existing content under proper headings. 
 
-Create clear section headings such as:
+STRICT RULES:
+- DO NOT remove, delete, or omit ANY information from the original text
+- DO NOT change the meaning or content of any sentences
+- DO NOT summarize or paraphrase any content
+- DO NOT add new information that wasn't in the original
+- PRESERVE all dates, numbers, company names, achievements, and details exactly as written
+- Your job is ONLY to organize and format, not to edit content
+
+TASK: Take all the text provided and organize it under appropriate headings:
 - CONTACT INFORMATION (name, email, phone, location, LinkedIn)
 - PROFESSIONAL SUMMARY or CAREER SUMMARY
 - SKILLS or TECHNICAL SKILLS 
@@ -117,14 +125,14 @@ Create clear section headings such as:
 - PROJECTS (if present)
 - ACHIEVEMENTS or AWARDS (if present)
 
-Format the content with:
-- Clear section headings in ALL CAPS
-- Consistent bullet points using •
-- Clean date formats
-- Proper spacing between sections
-- Remove any PDF artifacts or formatting issues
+FORMATTING:
+- Use ALL CAPS for section headings
+- Use • for bullet points
+- Keep all original content exactly as provided
+- Only remove obvious PDF artifacts (repeated characters, page numbers)
+- If unsure where content belongs, create an "ADDITIONAL INFORMATION" section
 
-Return well-structured CV content. If the content doesn't appear to be a CV, return "NO CV CONTENT FOUND".
+VERIFICATION: After formatting, ensure every piece of information from the original text is included somewhere in your output.
 
 Raw CV text to process:
 """
@@ -132,10 +140,10 @@ Raw CV text to process:
             response = self.openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "You are a CV formatting specialist. Structure CV content with proper headings and formatting."},
+                    {"role": "system", "content": "You are a formatting assistant. Your only job is to organize content under headings without changing, removing, or modifying any information. Preserve all content exactly as provided."},
                     {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
                 ],
-                temperature=0.1,
+                temperature=0.0,  # Reduced for more consistent formatting
                 max_tokens=4000
             )
             
@@ -155,28 +163,38 @@ Raw CV text to process:
         """Use LLM to structure experience superset content with proper headings"""
         try:
             prompt = """
-You are given text extracted from an experience superset PDF containing comprehensive career background. Please restructure this content with proper headings and clean formatting.
+CRITICAL INSTRUCTIONS: You are a formatting assistant. Your ONLY job is to organize existing content under proper headings.
 
-Create clear section headings such as:
+STRICT RULES - ABSOLUTE REQUIREMENTS:
+- DO NOT remove, delete, or omit ANY information from the original text
+- DO NOT change the meaning or content of any sentences
+- DO NOT summarize, paraphrase, or rewrite any content
+- DO NOT add new information that wasn't in the original
+- PRESERVE all dates, numbers, company names, project names, achievements, skills, and details EXACTLY as written
+- PRESERVE all quantified achievements (percentages, numbers, metrics) exactly as stated
+- Your job is ONLY to organize and format, not to edit or improve content
+- If there are multiple similar entries, keep ALL of them - do not consolidate or merge
+
+TASK: Take ALL the text provided and organize it under appropriate headings:
 - TECHNICAL SKILLS
-- WORK EXPERIENCE
+- WORK EXPERIENCE  
 - KEY PROJECTS
 - ACHIEVEMENTS
 - CERTIFICATIONS
 - EDUCATION
 - LEADERSHIP EXPERIENCE
 - AWARDS AND RECOGNITION
+- ADDITIONAL INFORMATION (for content that doesn't fit other categories)
 
-Format the content with:
-- Clear section headings in ALL CAPS
-- Consistent bullet points using •
-- Clean date formats (MM/YYYY format)
-- Quantified achievements where possible
-- Proper spacing between sections
-- Group similar experiences together
-- Remove any PDF artifacts or formatting issues
+FORMATTING GUIDELINES:
+- Use ALL CAPS for section headings
+- Use • for bullet points
+- Keep all original content exactly as provided
+- Only remove obvious PDF artifacts (repeated characters, page numbers, footers)
+- If you're unsure where something belongs, put it in "ADDITIONAL INFORMATION"
+- Maintain original date formats unless they are clearly corrupted
 
-Focus on creating a comprehensive, well-organized professional profile. If the content doesn't appear to be career-related, return "NO EXPERIENCE CONTENT FOUND".
+MANDATORY VERIFICATION: After formatting, verify that EVERY single piece of information, skill, project, achievement, date, and detail from the original text appears somewhere in your organized output. Nothing should be missing.
 
 Raw experience text to process:
 """
@@ -184,10 +202,10 @@ Raw experience text to process:
             response = self.openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "You are a professional experience formatting specialist. Structure career content with proper headings and formatting."},
+                    {"role": "system", "content": "You are a formatting assistant. Your ONLY job is to organize content under headings. You must preserve ALL information exactly as provided. Do not change, remove, or modify any content - only organize it under appropriate headings."},
                     {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
                 ],
-                temperature=0.1,
+                temperature=0.0,  # Set to 0 for maximum consistency
                 max_tokens=4000
             )
             
