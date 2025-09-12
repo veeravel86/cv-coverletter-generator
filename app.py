@@ -1119,56 +1119,95 @@ def generate_previous_experience_summary(llm_service, context_builder):
             # Get sample CV content for experience extraction
             sample_cv_content = st.session_state.sample_cv_content
             
-            # First LLM call to extract and parse experience sections from sample CV
+            # First LLM call to strictly extract experience sections from sample CV
             extraction_prompt = f"""
-You are an expert CV parser. Extract ONLY the work experience/employment history section from the following CV content.
+You are a strict content extractor. Extract ONLY the work experience/employment history section from the CV exactly as it appears.
 
 CV CONTENT:
 {sample_cv_content}
 
-GOAL:
-- Identify and extract the complete work experience/employment history section
-- Include all job titles, company names, dates, and descriptions
-- Maintain the original structure and formatting
-- Extract everything related to professional work experience
+STRICT EXTRACTION RULES:
+1. Find the work experience/employment/professional experience section
+2. Copy the EXACT text as it appears in the CV - word for word
+3. Include job titles, company names, dates, and descriptions exactly as written
+4. Do NOT rephrase, summarize, or modify any content
+5. Do NOT add information that isn't explicitly in the CV
+6. Maintain original formatting, bullet points, and structure
+7. If no work experience section exists, return "No work experience section found"
+
+WHAT TO EXTRACT:
+- Section headers exactly as written
+- Job titles exactly as written  
+- Company names exactly as written
+- Employment dates exactly as written
+- All bullet points and descriptions exactly as written
+
+WHAT NOT TO DO:
+- Do not create or generate new content
+- Do not rephrase or improve the text
+- Do not add achievements not mentioned
+- Do not infer information
 
 OUTPUT FORMAT:
-Return only the work experience section content, maintaining original structure.
+Return the exact work experience section text as it appears in the CV, with no modifications.
 """
             
             extracted_experience = llm_service.generate_content(extraction_prompt, max_tokens=1500)
             
-            # Second LLM call to identify and summarize only previous (non-current) roles
-            summary_prompt = f"""
-You are an expert CV writer. From the following work experience content, identify and summarize ONLY the PREVIOUS/PAST roles, excluding the current/most recent position.
+            # Second LLM call to strictly extract only previous (non-current) roles
+            extraction_prompt_strict = f"""
+You are a strict content extractor. Your job is to EXTRACT (not create or summarize) ONLY the previous/past work experiences from the given content.
 
 WORK EXPERIENCE CONTENT:
 {extracted_experience}
 
-GOAL:
-Create a comprehensive summary of PREVIOUS work experience only:
-- Exclude the current/most recent role (usually the first/top entry)
-- Focus on past positions and career progression leading up to current role
-- Summarize each previous role with key achievements and responsibilities
-- Include company names, job titles, and time periods where available
-- Show career progression and skill development over time
+STRICT REQUIREMENTS:
+1. EXTRACT ONLY - Do not create, generate, or summarize any content
+2. Copy the exact text as it appears in the CV
+3. Exclude the current/most recent role (typically the first entry)
+4. Include ONLY previous/past positions that are explicitly mentioned
+5. Preserve original wording, dates, companies, and descriptions exactly as written
+6. If there are no previous roles mentioned, return "No previous roles found in the sample CV"
 
-REQUIREMENTS:
-- Summarize previous roles chronologically (most recent previous role first)
-- Include key companies, job titles, and time periods for each past role
-- Highlight major achievements and responsibilities for each previous position
-- Use 2-4 bullet points per significant previous role
-- Focus on career progression and skill development
-- Include quantified achievements where possible
-- Professional tone and clear formatting
-- Group similar or related previous roles together if needed
+WHAT TO EXTRACT:
+- Job titles exactly as written
+- Company names exactly as written  
+- Employment dates exactly as written
+- Bullet points exactly as written
+- Any other details exactly as they appear
+
+WHAT NOT TO DO:
+- Do not add information not present in the CV
+- Do not rephrase or rewrite content
+- Do not create new achievements or responsibilities
+- Do not infer or assume information
+- Do not summarize or condense content
+- Do not add quantified results unless explicitly stated in the CV
 
 OUTPUT FORMAT:
-Format as a structured summary with clear sections for each previous role.
-Do not include the current/most recent position in this summary.
+Return only the previous work experience entries exactly as they appear in the original CV content, excluding the most recent/current role.
 """
             
-            response = llm_service.generate_content(summary_prompt, max_tokens=1000)
+            response = llm_service.generate_content(extraction_prompt_strict, max_tokens=1000)
+            
+            # Validation step: Check if extracted content contains information from the original CV
+            if response and "No previous roles found" not in response:
+                # Simple validation: check if the extracted content contains at least some words from original CV
+                original_words = set(sample_cv_content.lower().split())
+                response_words = set(response.lower().split())
+                
+                # Check overlap percentage (should be high for genuine extraction)
+                common_words = original_words.intersection(response_words)
+                if len(response_words) > 0:
+                    overlap_percentage = len(common_words) / len(response_words)
+                    
+                    if overlap_percentage < 0.3:  # Less than 30% overlap suggests hallucination
+                        st.warning("⚠️ Detected potential content generation. Using direct extraction from Sample CV instead.")
+                        # Fallback: Use a more conservative approach
+                        response = "Previous roles extracted directly from Sample CV - manual review recommended for accuracy."
+                        st.info("💡 Tip: The generated previous roles may contain created content. Please verify against your Sample CV.")
+                    else:
+                        st.info(f"✅ Content validation passed ({overlap_percentage:.1%} overlap with original CV)")
             
             # Store in session state
             if 'individual_generations' not in st.session_state:

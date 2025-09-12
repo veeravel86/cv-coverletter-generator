@@ -714,6 +714,12 @@ class PDFExporter:
         """Create a structured CV PDF using individual generated sections"""
         
         try:
+            # Debug logging
+            logger.info(f"Creating structured PDF with sections: {list(individual_sections.keys())}")
+            for section_name, content in individual_sections.items():
+                content_preview = content[:100] + "..." if len(content) > 100 else content
+                logger.info(f"Section '{section_name}': {len(content)} chars - '{content_preview}'")
+            
             # Validate input
             if not contact_info or not contact_info.get('name'):
                 raise ValueError("Contact information missing or invalid")
@@ -771,11 +777,15 @@ class PDFExporter:
                 story.append(Spacer(1, 0.2*inch))
             
             # 5. Previous Roles - Summarized (3-4 bullets max per role)
-            if individual_sections.get('previous_experience'):
+            previous_exp_content = individual_sections.get('previous_experience', '').strip()
+            if previous_exp_content:
+                logger.info(f"Adding previous roles section - content length: {len(previous_exp_content)}")
                 story.append(Paragraph("<b>PREVIOUS ROLES</b>", prof_styles['SubSectionHeading']))
                 story.append(Spacer(1, 0.1*inch))
-                self._add_summarized_previous_roles(story, individual_sections['previous_experience'], prof_styles)
+                self._add_summarized_previous_roles(story, previous_exp_content, prof_styles)
                 story.append(Spacer(1, 0.2*inch))
+            else:
+                logger.warning("Previous experience section is empty or missing - skipping")
             
             # 6. Additional Information Table (if any additional info exists)
             # This would be added if we had certifications, awards, etc.
@@ -876,7 +886,7 @@ class PDFExporter:
         return content
     
     def _add_structured_skills_boxes(self, story: List, skills_text: str, styles: Dict, colors: Dict):
-        """Add skills in individual colored boxes with gaps between them"""
+        """Add each skill in its own individual colored box with gaps between them"""
         from reportlab.platypus import Table, TableStyle
         from reportlab.lib.colors import HexColor
         
@@ -887,52 +897,58 @@ class PDFExporter:
         bg_color = colors.get('secondary', HexColor('#20B2AA'))
         text_color = HexColor('#FFFFFF')
         
-        # Create individual skill boxes with gaps - simpler approach
-        max_skills_per_row = 4
-        box_width = 1.4 * inch
-        gap_width = 0.15 * inch  # Gap between boxes
+        # Create truly individual boxes - one skill per table, properly spaced
+        box_width = 1.3 * inch
+        max_skills_per_row = 3  # Reduce to 3 for better spacing
         
+        # Group skills into rows
         for i in range(0, len(skills), max_skills_per_row):
             row_skills = skills[i:i+max_skills_per_row]
             # Filter out empty skills
-            row_skills = [skill for skill in row_skills if skill.strip()]
+            row_skills = [skill.strip() for skill in row_skills if skill.strip()]
             
             if row_skills:
-                # Create row data with gaps (empty cells) between skills
-                row_data = []
+                # Build table with individual cells, each cell is a separate skill box
+                table_data = [[]]
                 col_widths = []
                 
                 for j, skill in enumerate(row_skills):
-                    row_data.append(skill)
+                    # Add skill to table data
+                    table_data[0].append(skill)
                     col_widths.append(box_width)
                     
-                    # Add gap column except after last skill
+                    # Add spacer column between skills (except after last skill)
                     if j < len(row_skills) - 1:
-                        row_data.append("")  # Empty cell for gap
-                        col_widths.append(gap_width)
+                        table_data[0].append("")  # Empty spacer cell
+                        col_widths.append(0.3 * inch)  # Spacer width
                 
-                # Create table with alternating skill and gap columns
-                skill_table = Table([row_data], colWidths=col_widths)
+                # Create the table
+                skills_table = Table(table_data, colWidths=col_widths)
                 
-                # Apply styling only to skill columns (even indices)
+                # Apply styling - each skill gets individual box styling
                 table_style = []
-                for col_idx in range(0, len(row_data), 2):  # Every other column (skills only)
-                    table_style.extend([
-                        ('BACKGROUND', (col_idx, 0), (col_idx, 0), bg_color),
-                        ('TEXTCOLOR', (col_idx, 0), (col_idx, 0), text_color),
-                        ('ALIGN', (col_idx, 0), (col_idx, 0), 'CENTER'),
-                        ('VALIGN', (col_idx, 0), (col_idx, 0), 'MIDDLE'),
-                        ('FONTNAME', (col_idx, 0), (col_idx, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (col_idx, 0), (col_idx, 0), 9),
-                        ('TOPPADDING', (col_idx, 0), (col_idx, 0), 6),
-                        ('BOTTOMPADDING', (col_idx, 0), (col_idx, 0), 6),
-                        ('LEFTPADDING', (col_idx, 0), (col_idx, 0), 8),
-                        ('RIGHTPADDING', (col_idx, 0), (col_idx, 0), 8),
-                        ('BOX', (col_idx, 0), (col_idx, 0), 1, bg_color)
-                    ])
+                for col_idx in range(len(table_data[0])):
+                    cell_content = table_data[0][col_idx]
+                    
+                    if cell_content and cell_content.strip():  # This is a skill cell (not spacer)
+                        table_style.extend([
+                            ('BACKGROUND', (col_idx, 0), (col_idx, 0), bg_color),
+                            ('TEXTCOLOR', (col_idx, 0), (col_idx, 0), text_color),
+                            ('ALIGN', (col_idx, 0), (col_idx, 0), 'CENTER'),
+                            ('VALIGN', (col_idx, 0), (col_idx, 0), 'MIDDLE'),
+                            ('FONTNAME', (col_idx, 0), (col_idx, 0), 'Helvetica-Bold'),
+                            ('FONTSIZE', (col_idx, 0), (col_idx, 0), 9),
+                            ('TOPPADDING', (col_idx, 0), (col_idx, 0), 6),
+                            ('BOTTOMPADDING', (col_idx, 0), (col_idx, 0), 6),
+                            ('LEFTPADDING', (col_idx, 0), (col_idx, 0), 8),
+                            ('RIGHTPADDING', (col_idx, 0), (col_idx, 0), 8),
+                            ('BOX', (col_idx, 0), (col_idx, 0), 1, bg_color),
+                            ('GRID', (col_idx, 0), (col_idx, 0), 1, bg_color)
+                        ])
+                    # Spacer cells get no styling (remain invisible)
                 
-                skill_table.setStyle(TableStyle(table_style))
-                story.append(skill_table)
+                skills_table.setStyle(TableStyle(table_style))
+                story.append(skills_table)
                 story.append(Spacer(1, 0.15*inch))
     
     def _extract_skills_list(self, skills_text: str) -> List[str]:
@@ -1001,12 +1017,26 @@ class PDFExporter:
             # Clean bullet text of asterisk characters
             clean_bullet = self._clean_bullet_text(bullet)
             
-            # Format SAR bullet with bold heading
+            # Format SAR bullet with bold first two words before colon
             if ':' in clean_bullet:
                 heading, description = clean_bullet.split(':', 1)
                 heading = heading.strip()
                 description = description.strip()
-                formatted_bullet = f"• <b>{heading}:</b> {description}"
+                
+                # Extract first two words from heading and make them bold
+                heading_words = heading.split()
+                if len(heading_words) >= 2:
+                    # Make first two words bold, rest normal
+                    first_two_bold = f"<b>{heading_words[0]} {heading_words[1]}</b>"
+                    remaining_words = " ".join(heading_words[2:]) if len(heading_words) > 2 else ""
+                    if remaining_words:
+                        formatted_heading = f"{first_two_bold} {remaining_words}"
+                    else:
+                        formatted_heading = first_two_bold
+                    formatted_bullet = f"• {formatted_heading}: {description}"
+                else:
+                    # Less than 2 words, just make all bold
+                    formatted_bullet = f"• <b>{heading}:</b> {description}"
             else:
                 formatted_bullet = f"• {clean_bullet}"
             
@@ -1048,13 +1078,58 @@ class PDFExporter:
     
     def _add_summarized_previous_roles(self, story: List, previous_text: str, styles: Dict):
         """Add previous roles with 3-4 bullets max per role"""
+        logger.info(f"_add_summarized_previous_roles called with {len(previous_text) if previous_text else 0} characters")
+        
         if not previous_text:
+            logger.warning("No previous roles content provided")
             return
             
         # Clean and parse the text into lines
         cleaned_text = self._clean_text_content(previous_text)
         lines = [line.strip() for line in cleaned_text.split('\n') if line.strip()]
         
+        # Check if we have job title lines with pipe symbols
+        has_job_titles = any('|' in line and not line.startswith(('•', '-', '*', '**')) for line in lines)
+        logger.info(f"Previous roles has job titles with |: {has_job_titles}")
+        
+        if has_job_titles:
+            # Process with individual job titles
+            self._process_previous_roles_with_titles(story, lines, styles)
+        else:
+            # No job titles found, treat as summary bullets under a generic header
+            logger.info("No job titles found, adding generic previous roles header")
+            story.append(Paragraph("<b>Previous Experience Highlights</b>", styles['JobTitle']))
+            story.append(Spacer(1, 0.05*inch))
+            
+            # Add all bullets under this generic header
+            bullet_count = 0
+            max_bullets = 8  # Limit total bullets for previous roles
+            
+            for line in lines:
+                if bullet_count >= max_bullets:
+                    break
+                    
+                # Check if this is a bullet point
+                if line.startswith(('•', '-', '*', '**')):
+                    clean_bullet = self._clean_bullet_text(line)
+                    if clean_bullet:
+                        bullet_text = clean_bullet.lstrip('•-*').strip()
+                        if bullet_text:
+                            story.append(Paragraph(f"• {bullet_text}", styles['BulletText']))
+                            bullet_count += 1
+                
+                # If line doesn't have bullet marker but looks like content, treat as bullet
+                elif len(line) > 20:  # Substantial content
+                    clean_bullet = self._clean_bullet_text(line)
+                    if clean_bullet:
+                        story.append(Paragraph(f"• {clean_bullet}", styles['BulletText']))
+                        bullet_count += 1
+        
+        # Add some spacing after previous roles
+        story.append(Spacer(1, 0.1*inch))
+    
+    def _process_previous_roles_with_titles(self, story: List, lines: List[str], styles: Dict):
+        """Process previous roles that have job title lines with pipe symbols"""
         current_role = None
         current_company = None
         bullet_count = 0
@@ -1092,9 +1167,6 @@ class PDFExporter:
                 if clean_bullet:
                     story.append(Paragraph(f"• {clean_bullet}", styles['BulletText']))
                     bullet_count += 1
-        
-        # Add some spacing after previous roles
-        story.append(Spacer(1, 0.1*inch))
 
 @st.cache_resource
 def get_pdf_exporter():
