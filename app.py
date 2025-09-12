@@ -66,8 +66,8 @@ def main():
         
         generation_mode = st.radio(
             "Generation Mode",
-            ["CV Package", "Cover Letter", "Both"],
-            help="Choose what to generate"
+            ["Cover Letter"],
+            help="Individual CV sections and complete CV generation available in Generate tab"
         )
         
         output_format = st.multiselect(
@@ -89,13 +89,13 @@ def main():
             st.info("👆 Please upload and process documents first")
     
     with tab3:
-        if st.session_state.generated_cv or st.session_state.generated_cover_letter:
+        if st.session_state.get('whole_cv_content') or st.session_state.generated_cover_letter:
             handle_validation()
         else:
             st.info("👆 Please generate content first")
     
     with tab4:
-        if st.session_state.generated_cv or st.session_state.generated_cover_letter:
+        if st.session_state.get('whole_cv_content') or st.session_state.generated_cover_letter:
             handle_export(output_format)
         else:
             st.info("👆 Please generate content first")
@@ -354,13 +354,9 @@ def handle_generation(generation_mode):
         context_preview = st.checkbox("Show context preview", value=False)
     
     with col1:
-        if generation_mode in ["CV Package", "Both"]:
-            st.subheader("📄 Complete CV Package Generation")
-            
-            if st.button("🚀 Generate Full CV Package", type="primary"):
-                generate_cv_package(llm_service, context_builder, auto_retry, max_retries, context_preview)
+        st.info("📝 Use the 'Generate Whole CV' section above to create your complete professional CV")
         
-        if generation_mode in ["Cover Letter", "Both"]:
+        if generation_mode == "Cover Letter":
             st.subheader("📝 Cover Letter Generation")
             
             company_name = st.text_input("Company Name (optional)", placeholder="e.g., TechCorp Inc.")
@@ -369,80 +365,6 @@ def handle_generation(generation_mode):
             if st.button("🚀 Generate Cover Letter", type="primary"):
                 generate_cover_letter(llm_service, context_builder, auto_retry, max_retries, context_preview, company_name, role_title)
 
-def generate_cv_package(llm_service, context_builder, auto_retry, max_retries, context_preview):
-    with st.spinner("Generating CV package..."):
-        try:
-            context = context_builder.build_cv_generation_context()
-            
-            if context_preview:
-                with st.expander("📋 Context Preview"):
-                    st.text_area("Generated Context", context[:2000] + "..." if len(context) > 2000 else context, height=200)
-            
-            cv_prompt = load_prompt4()
-            
-            for attempt in range(max_retries + 1):
-                try:
-                    result = llm_service.generate_cv_package(cv_prompt, context)
-                    
-                    if result["valid"] or not auto_retry or attempt == max_retries:
-                        break
-                    
-                    st.warning(f"⚠️ Attempt {attempt + 1} failed validation. Retrying...")
-                    result = llm_service.improve_response(
-                        result["content"], result["validation"], cv_prompt, context
-                    )
-                except Exception as retry_error:
-                    st.error(f"❌ Error on attempt {attempt + 1}: {str(retry_error)}")
-                    if attempt == max_retries:
-                        raise retry_error
-                    st.info(f"🔄 Retrying... ({attempt + 2}/{max_retries + 1})")
-                    continue
-            
-            st.session_state.generated_cv = result["content"]
-            st.session_state.validation_results["cv"] = result["validation"]
-            
-            if result["valid"]:
-                st.success("✅ CV Package generated successfully!")
-            else:
-                st.warning("⚠️ CV Package generated but validation failed")
-            
-            st.subheader("📄 Generated CV Package")
-            st.text_area("CV Content", result["content"], height=400, key="cv_preview")
-            
-            with st.expander("🔍 Validation Details"):
-                for section, validation in result["validation"].items():
-                    color = "🟢" if validation.get("valid", False) else "🔴"
-                    st.write(f"{color} {validation.get('message', section)}")
-            
-        except Exception as e:
-            error_msg = str(e)
-            st.error(f"❌ **CV Package Generation Failed**")
-            st.error(f"**Error Details:** {error_msg}")
-            
-            # Show full error in an expandable section for easy copying
-            with st.expander("🔍 **Full Error Details (Click to Copy)**"):
-                full_error = f"""
-ERROR TYPE: {type(e).__name__}
-ERROR MESSAGE: {error_msg}
-STACK TRACE: 
-{traceback.format_exc()}
-                """
-                st.code(full_error)
-            
-            # Also log the error
-            logger.error(f"CV generation error: {e}")
-            logger.error(f"Full traceback: {traceback.format_exc()}")
-            
-            # Show troubleshooting tips
-            st.info("""
-            **Troubleshooting Tips:**
-            1. Check your OpenAI API key is valid and has credits
-            2. Try switching to a different model (GPT-4o vs GPT-4o-mini)
-            3. Ensure all three PDFs were uploaded and processed correctly
-            4. Try regenerating with different settings
-            """)
-            
-            return None
 
 def generate_cover_letter(llm_service, context_builder, auto_retry, max_retries, context_preview, company_name, role_title):
     with st.spinner("Generating cover letter..."):
@@ -515,10 +437,10 @@ def handle_validation():
     text_processor = TextProcessor()
     validator = ContentValidator()
     
-    if st.session_state.generated_cv:
-        st.subheader("📄 CV Package Analysis")
+    if st.session_state.get('whole_cv_content'):
+        st.subheader("📄 Complete CV Analysis")
         
-        cv_content = st.session_state.generated_cv
+        cv_content = st.session_state.whole_cv_content
         
         col1, col2, col3 = st.columns(3)
         
@@ -570,8 +492,8 @@ def handle_export(output_formats):
     output_dir = Path("outputs")
     output_dir.mkdir(exist_ok=True)
     
-    if st.session_state.generated_cv:
-        st.subheader("📄 CV Package Export")
+    if st.session_state.get('whole_cv_content'):
+        st.subheader("📄 Complete CV Export")
         
         col1, col2 = st.columns(2)
         
@@ -598,11 +520,11 @@ def apply_cv_styling():
         try:
             style_applicator = StyleApplicator()
             styled_cv = style_applicator.match_sample_style(
-                st.session_state.generated_cv,
+                st.session_state.whole_cv_content,
                 st.session_state.style_profile.__dict__
             )
             
-            st.session_state.generated_cv = styled_cv
+            st.session_state.whole_cv_content = styled_cv
             st.success("✅ CV styled to match sample format!")
             st.rerun()
             
@@ -636,11 +558,11 @@ def generate_all_exports(timestamp, output_formats):
         docx_exporter = get_docx_exporter()
         pdf_exporter = get_pdf_exporter()
         
-        if st.session_state.generated_cv:
+        if st.session_state.get('whole_cv_content'):
             if "PDF (.pdf)" in output_formats and st.session_state.style_profile:
                 pdf_path = f"outputs/cv_formatted_{timestamp}.pdf"
                 pdf_exporter.export_to_pdf(
-                    st.session_state.generated_cv,
+                    st.session_state.whole_cv_content,
                     st.session_state.style_profile,
                     pdf_path
                 )
@@ -649,7 +571,7 @@ def generate_all_exports(timestamp, output_formats):
             if "Word (.docx)" in output_formats and st.session_state.style_profile:
                 docx_path = f"outputs/cv_formatted_{timestamp}.docx"
                 docx_exporter.export_to_docx(
-                    st.session_state.generated_cv,
+                    st.session_state.whole_cv_content,
                     st.session_state.style_profile,
                     docx_path
                 )
@@ -729,18 +651,6 @@ def get_mime_type(format_name):
     else:
         return "application/octet-stream"
 
-def load_prompt4():
-    try:
-        with open("prompts/prompt4_combined.txt", 'r', encoding='utf-8') as f:
-            return f.read()
-    except FileNotFoundError:
-        return """Generate a professional CV package with:
-        
-        1. CAREER SUMMARY (≤40 words exactly)
-        2. EXACTLY 8 SAR bullets with two-word headings (e.g., "Project Leadership: Led team of 5...")
-        3. EXACTLY 10 skills (≤2 words each)
-        
-        Use the job description and candidate superset to create targeted, ATS-optimized content."""
 
 def load_prompt5(company_name=None, role_title=None):
     try:
