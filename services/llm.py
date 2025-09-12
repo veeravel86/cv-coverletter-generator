@@ -276,6 +276,23 @@ class OpenAILLMService:
                 issues.append(result.get("message", f"{section} validation failed"))
         
         return f"Please fix the following issues:\n" + "\n".join(f"- {issue}" for issue in issues)
+    
+    def generate_content(self, prompt: str, max_tokens: int = None) -> str:
+        """General purpose content generation method"""
+        
+        messages = [{"role": "user", "content": prompt}]
+        
+        # Use provided max_tokens or fall back to config
+        original_max_tokens = self.config.max_tokens
+        if max_tokens:
+            self.config.max_tokens = max_tokens
+        
+        try:
+            response = self._make_request_with_retry(messages)
+            return response
+        finally:
+            # Restore original max_tokens
+            self.config.max_tokens = original_max_tokens
 
 @st.cache_resource
 def create_llm_service(model_choice: str):
