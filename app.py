@@ -796,36 +796,71 @@ Return format:
             st.error(f"❌ Error generating skills: {str(e)}")
 
 def generate_experience_bullets(llm_service, context_builder):
-    """Generate top 8 experience bullets with expandable display"""
+    """Generate top 8 experience bullets with expandable display using professional ATS-optimized prompt"""
     
     with st.spinner("💼 Generating top 8 experience bullets..."):
         try:
-            # Get relevant context from vector store
-            context = context_builder.build_context("work experience achievements projects accomplishments")
+            # Get job description context
+            job_context = context_builder.build_context("job description requirements responsibilities qualifications")
             
-            prompt = f"""
-Based on the following context, create exactly 8 high-impact experience bullet points using the SAR (Situation, Action, Result) format.
-
-Context:
-{context}
-
-Requirements:
-- Exactly 8 bullets
-- Each bullet should follow: **Two-Word Header**: Description with quantified results
-- Include specific numbers, percentages, or metrics where possible
-- Use strong action verbs
-- Focus on achievements and impact, not just responsibilities
-- Each bullet should be 1-2 lines maximum
-- Prioritize the most impressive and relevant accomplishments
-
-Format example:
-• **Strategic Planning**: Led cross-functional team of 12 to develop new product strategy, resulting in 25% revenue increase
-• **Process Optimization**: Implemented automated workflow reducing processing time by 40% and improving accuracy to 98%
-
-Return exactly 8 bullets in this format.
-"""
+            # Get experience context  
+            experience_context = context_builder.build_context("work experience achievements projects accomplishments results")
             
-            response = llm_service.generate_content(prompt, max_tokens=800)
+            prompt = f"""You are an expert CV writer and ATS optimizer for senior engineering leadership roles. Read the below mentioned guidelines and accomplish the task from the provided context.
+
+GOAL:
+Read the provided context containing:
+- Job Description: Complete job requirements and expectations
+- Experience Superset: All possible experience points and achievements
+
+From these, create EXACTLY 8 high-impact experience summary bullets that are:
+- Directly aligned with the job description
+- Ordered by PRIORITY based on job requirements and implied expectations
+- Polished for both ATS scanning and human decision-makers
+
+JOB DESCRIPTION CONTEXT:
+{job_context}
+
+EXPERIENCE SUPERSET CONTEXT:
+{experience_context}
+
+BULLET REQUIREMENTS:
+- Start with a TWO-WORD HEADING (no abbreviations), ideally using language from the job description
+- Each bullet must follow SAR (Situation–Action–Result) in one concise sentence (~22–35 words)
+- Use job description keywords naturally and accurately
+- Include metrics or quantifiable results ONLY if present in the experience context; otherwise, use qualitative outcomes
+- No fabrication or vague fluff
+- Use international English unless the job clearly uses US spelling
+- Each bullet should show measurable impact, leadership depth, and business relevance
+
+PRIORITY RULES:
+- Rank bullets strictly by relevance to the job description:
+  1. Mission-critical competencies, leadership scope, and business outcomes the job emphasizes
+  2. Skills and themes repeated or highlighted in job description wording
+  3. Emerging themes or differentiators likely valued for this role
+- Highest-priority achievements appear first
+- No duplicated content or similar bullets
+
+PROCESS:
+1. Parse job description context → extract competencies, themes, leadership scope, hard skills, and keyword frequencies
+2. Parse experience context → shortlist all relevant achievements
+3. Rank shortlist bullets against job requirements and implied role impact
+4. Rewrite top 8 bullets in SAR style with job keywords and two-word headings
+5. Sequence bullets in order of job relevance (highest priority first)
+6. Final polish: ensure conciseness, ATS optimization, and strong action verbs
+
+OUTPUT FORMAT (strict):
+- Output ONLY the 8 bullets, nothing else
+- Format: **Two Word Heading** | SAR statement showing measurable impact
+- Example format (not content): **Cloud Migration** | Inherited aging on-prem infra; led phased AWS migration with team restructure; cut costs 20%, boosted uptime, and accelerated deployment cycles.
+
+QUALITY BAR:
+- Each bullet must be job-aligned, SAR-structured, outcome-focused, and priority-ranked
+- Optimize for clarity, keywords, and quantified results as if reviewed by an ATS and a CTO in a competitive search
+
+BEGIN."""
+            
+            response = llm_service.generate_content(prompt, max_tokens=1000)
             
             # Store in session state
             if 'individual_generations' not in st.session_state:
@@ -835,8 +870,10 @@ Return exactly 8 bullets in this format.
             # Display with expander
             with st.expander("💼 Top 8 Experience Bullets - Click to expand", expanded=True):
                 st.markdown("### Generated Experience Bullets")
+                st.markdown("*ATS-optimized bullets aligned with job requirements and prioritized by relevance*")
+                st.markdown("---")
                 st.markdown(response)
-                st.caption("🎯 High-impact bullets with quantified achievements using SAR format")
+                st.caption("🎯 Professional SAR-format bullets optimized for ATS and hiring managers")
             
         except Exception as e:
             st.error(f"❌ Error generating experience bullets: {str(e)}")
