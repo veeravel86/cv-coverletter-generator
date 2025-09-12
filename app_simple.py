@@ -12,6 +12,7 @@ from services.rag import create_rag_retriever, ContextBuilder
 from services.llm import get_llm_service
 from services.style_extract import get_style_extractor
 from services.skills_generator import get_skills_generator
+from services.experience_generator import get_experience_generator
 from exporters.pdf_export import get_pdf_exporter
 
 load_dotenv()
@@ -305,13 +306,15 @@ def generate_cv(llm_service, context_builder):
             # Get processed documents from session state
             processed_texts = st.session_state.processed_documents["processed_texts"]
             
-            # Generate optimized skills first
+            # Initialize generators
             skills_generator = get_skills_generator()
+            experience_generator = get_experience_generator()
             
             job_description = processed_texts.get("job_description", "")
             experience_superset = processed_texts.get("experience_superset", "")
             skills_superset = processed_texts.get("skills_superset", "")
             
+            # Phase 1: Generate optimized skills
             with st.spinner("🎯 Generating optimized skills..."):
                 skills_result = skills_generator.generate_top_skills(
                     job_description, experience_superset, skills_superset
@@ -319,37 +322,97 @@ def generate_cv(llm_service, context_builder):
                 
                 if skills_result["valid"]:
                     st.success(f"✅ Generated {skills_result['skill_count']} optimized skills")
-                    # Show skills in an expander
-                    with st.expander("🔍 **Generated Skills Preview**"):
-                        st.write("**Top 10 Skills (Priority Order):**")
-                        for i, skill in enumerate(skills_result["skills"], 1):
-                            st.write(f"{i}. {skill}")
                 else:
                     st.warning(f"⚠️ Skills generation: {skills_result['validation_message']}")
+            
+            # Phase 2: Generate experience summary bullets
+            experience_result = None
+            if experience_superset and job_description:
+                with st.spinner("📋 Generating experience summary bullets..."):
+                    experience_result = experience_generator.generate_experience_summary(
+                        job_description, experience_superset
+                    )
+                    
+                    if experience_result["valid"]:
+                        st.success(f"✅ Generated {experience_result['bullet_count']} experience bullets")
+                    else:
+                        st.warning(f"⚠️ Experience generation: {experience_result['validation_message']}")
+            
+            # Show generated content in expandable UI
+            st.subheader("🔍 Generated Content Preview")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                with st.expander("🎯 **Generated Skills (Top 10)**", expanded=True):
+                    if skills_result["skills"]:
+                        st.write("**Priority Order (Job Description Aligned):**")
+                        for i, skill in enumerate(skills_result["skills"], 1):
+                            st.write(f"**{i}.** {skill}")
+                        
+                        # Skills statistics
+                        st.divider()
+                        skill_col1, skill_col2 = st.columns(2)
+                        with skill_col1:
+                            st.metric("Skills Count", skills_result["skill_count"])
+                        with skill_col2:
+                            st.metric("Validation", "✅ Pass" if skills_result["valid"] else "⚠️ Partial")
+                    else:
+                        st.warning("No skills generated")
+            
+            with col2:
+                with st.expander("📋 **Generated Experience Bullets (Top 8)**", expanded=True):
+                    if experience_result and experience_result["bullets"]:
+                        st.write("**SAR Format (Situation-Action-Result):**")
+                        for i, bullet in enumerate(experience_result["bullets"], 1):
+                            st.write(f"**{i}.** {bullet.full_bullet}")
+                            st.caption(f"   Heading: {bullet.heading} | Words: {bullet.word_count}")
+                        
+                        # Experience statistics
+                        st.divider()
+                        exp_col1, exp_col2 = st.columns(2)
+                        with exp_col1:
+                            st.metric("Bullets Count", experience_result["bullet_count"])
+                            st.metric("Two-Word Headings", experience_result["two_word_headings_count"])
+                        with exp_col2:
+                            if experience_result["bullets"]:
+                                summary = experience_generator.get_bullets_summary(experience_result["bullets"])
+                                st.metric("Avg Words", summary["avg_word_count"])
+                                st.metric("Word Range", summary["word_count_range"])
+                    else:
+                        st.info("Experience superset needed for bullet generation")
+            
+            # Phase 3: Generate complete CV with optimized components
+            st.divider()
             
             # Build context for CV generation
             context = context_builder.build_cv_generation_context()
             
-            # Create comprehensive CV prompt with generated skills
+            # Create comprehensive CV prompt with generated skills and experience
             formatted_skills = skills_generator.format_skills_for_cv(skills_result["skills"], "bullet")
+            
+            formatted_experience = ""
+            if experience_result and experience_result["bullets"]:
+                formatted_experience = experience_generator.format_bullets_for_cv(
+                    experience_result["bullets"], "standard"
+                )
             
             cv_prompt = f"""You are a professional CV writer creating an ATS-optimized resume for a senior engineering role.
 
-TASK: Create a complete, professional CV using the provided context and optimized skills.
+TASK: Create a complete, professional CV using the provided context and pre-generated optimized components.
 
 REQUIRED SECTIONS:
 1. **CONTACT INFORMATION** - Name, email, phone, location (placeholder format)
+
 2. **PROFESSIONAL SUMMARY** - 3-4 lines highlighting key qualifications and value proposition
+
 3. **CORE SKILLS** - Use EXACTLY these optimized skills:
 {formatted_skills}
 
-4. **PROFESSIONAL EXPERIENCE** - 3-4 most relevant roles with:
-   - Company, job title, dates (MM/YYYY - MM/YYYY format)
-   - 3-4 achievement-focused bullet points per role
-   - Quantified results where possible
-   - Keywords from job description
+4. **PROFESSIONAL EXPERIENCE** - {"Use these pre-generated experience bullets:" if formatted_experience else "3-4 most relevant roles with achievement-focused bullets"}
+{formatted_experience if formatted_experience else "   - Company, job title, dates (MM/YYYY - MM/YYYY format)\n   - 3-4 achievement-focused bullet points per role\n   - Quantified results where possible\n   - Keywords from job description"}
 
-5. **EDUCATION** - Degree, institution, year
+5. **EDUCATION** - Degree, institution, year (extract from context)
 
 FORMATTING REQUIREMENTS:
 - Use ALL CAPS for section headings
@@ -363,36 +426,53 @@ FORMATTING REQUIREMENTS:
 QUALITY STANDARDS:
 - Tailor content specifically to the target role
 - Highlight relevant achievements and impact
-- Use strong action verbs
-- Include relevant keywords from job description
+- Use strong action verbs and job description keywords
 - Ensure consistency in formatting and style
+- Create a cohesive, professional document
 
 Generate a complete, professional CV that will pass ATS scanning and impress hiring managers."""
             
             with st.spinner("📝 Generating complete CV..."):
                 result = llm_service.generate_cv_package(cv_prompt, context)
                 
+                # Store results in session state
                 st.session_state.generated_cv = result["content"]
-                st.session_state.generated_skills = skills_result  # Store for reference
+                st.session_state.generated_skills = skills_result
+                if experience_result:
+                    st.session_state.generated_experience = experience_result
                 
-                st.success("✅ CV generated successfully!")
+                st.success("✅ Complete CV generated successfully!")
                 
-                # Display results
-                col1, col2 = st.columns([3, 1])
+                # Display final CV
+                st.subheader("📄 Complete Generated CV")
                 
-                with col1:
-                    st.subheader("📄 Generated CV")
-                    st.text_area("CV Content", result["content"], height=500, key="cv_preview")
+                # Final stats and CV display
+                final_col1, final_col2 = st.columns([3, 1])
                 
-                with col2:
-                    st.subheader("📊 Generation Stats")
-                    st.metric("Skills Generated", skills_result["skill_count"])
-                    st.metric("Word Count", len(result["content"].split()))
+                with final_col1:
+                    st.text_area("CV Content", result["content"], height=600, key="cv_preview")
+                
+                with final_col2:
+                    st.subheader("📊 Generation Summary")
                     
+                    st.metric("Skills Generated", skills_result["skill_count"])
+                    if experience_result:
+                        st.metric("Experience Bullets", experience_result["bullet_count"])
+                    st.metric("Total Word Count", len(result["content"].split()))
+                    
+                    # Quality indicators
+                    st.divider()
                     if skills_result["valid"]:
                         st.success("✅ Skills Optimized")
                     else:
                         st.warning("⚠️ Skills Partial")
+                        
+                    if experience_result and experience_result["valid"]:
+                        st.success("✅ Experience SAR Format")
+                    elif experience_result:
+                        st.warning("⚠️ Experience Partial")
+                    else:
+                        st.info("ℹ️ Basic Experience Used")
             
         except Exception as e:
             st.error(f"❌ **CV Generation Failed**")
