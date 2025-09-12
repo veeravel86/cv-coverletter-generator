@@ -147,6 +147,21 @@ def handle_document_upload():
                 with col3:
                     st.metric("Vector Embeddings", len(processed_data["documents"]))
                 
+                # Display extracted job description
+                st.divider()
+                st.subheader("📄 Extracted Job Description")
+                jd_text = processed_data["texts"].get("job_description", "")
+                if jd_text:
+                    st.text_area(
+                        "Job Description Content",
+                        jd_text,
+                        height=300,
+                        help="This is the text extracted from your uploaded job description PDF"
+                    )
+                    st.info(f"📊 Job Description: {len(jd_text.split())} words, {len(jd_text)} characters")
+                else:
+                    st.warning("No job description text was extracted")
+                
             except Exception as e:
                 st.error(f"❌ **Document Processing Failed**")
                 st.error(f"**Error Details:** {str(e)}")
