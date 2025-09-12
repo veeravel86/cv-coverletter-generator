@@ -8,7 +8,7 @@ import streamlit as st
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, KeepTogether
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, KeepTogether, Table, TableStyle
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
 from reportlab.lib.colors import black, darkblue, HexColor
 
@@ -708,6 +708,359 @@ class PDFExporter:
             ]))
             
             story.append(table)
+
+    def create_structured_cv_pdf(self, contact_info: Dict[str, str], individual_sections: Dict[str, str], 
+                                color_scheme: str = "teal") -> str:
+        """Create a structured CV PDF using individual generated sections"""
+        
+        try:
+            # Validate input
+            if not contact_info or not contact_info.get('name'):
+                raise ValueError("Contact information missing or invalid")
+            
+            # Setup color scheme
+            colors = self._get_color_scheme(color_scheme)
+            
+            # Create output path
+            outputs_dir = Path("outputs")
+            outputs_dir.mkdir(exist_ok=True)
+            output_path = outputs_dir / f"Structured_CV_{contact_info['name'].replace(' ', '_')}.pdf"
+            
+            # Create PDF document
+            doc = SimpleDocTemplate(
+                str(output_path),
+                pagesize=A4,
+                rightMargin=0.7*inch,
+                leftMargin=0.7*inch,
+                topMargin=0.8*inch,
+                bottomMargin=0.8*inch
+            )
+            
+            story = []
+            
+            # Setup professional styles for structured layout
+            prof_styles = self._create_structured_styles(colors)
+            
+            # 1. Header Section - Single line contact info with pipe separators
+            contact_line = f"{contact_info.get('name', 'N/A')} | {contact_info.get('email', '')} | {contact_info.get('phone', '')} | {contact_info.get('location', '')}"
+            story.append(Paragraph(contact_line, prof_styles['ContactHeader']))
+            story.append(Spacer(1, 0.3*inch))
+            
+            # 2. Professional Summary (≤30 words from generated content)
+            if individual_sections.get('executive_summary'):
+                story.append(Paragraph("<b>PROFESSIONAL SUMMARY</b>", prof_styles['SectionHeading']))
+                story.append(Spacer(1, 0.1*inch))
+                summary = self._clean_text_content(individual_sections['executive_summary'])
+                story.append(Paragraph(summary, prof_styles['SummaryText']))
+                story.append(Spacer(1, 0.2*inch))
+            
+            # 3. Skills Section - Visual boxes, 4 per row
+            if individual_sections.get('top_skills'):
+                story.append(Paragraph("<b>CORE SKILLS</b>", prof_styles['SectionHeading']))
+                story.append(Spacer(1, 0.1*inch))
+                self._add_structured_skills_boxes(story, individual_sections['top_skills'], prof_styles, colors)
+                story.append(Spacer(1, 0.2*inch))
+            
+            # 4. Current Role Experience - Top 8 SAR Bullets (Detailed)
+            if individual_sections.get('experience_bullets'):
+                story.append(Paragraph("<b>PROFESSIONAL EXPERIENCE</b>", prof_styles['SectionHeading']))
+                story.append(Spacer(1, 0.1*inch))
+                
+                # Add current role header
+                story.append(Paragraph("<b>Current Role</b> | Present", prof_styles['JobHeader']))
+                story.append(Spacer(1, 0.05*inch))
+                
+                # Add the 8 SAR bullets
+                self._add_sar_experience_bullets(story, individual_sections['experience_bullets'], prof_styles)
+                story.append(Spacer(1, 0.2*inch))
+            
+            # 5. Previous Roles - Summarized (3-4 bullets max per role)
+            if individual_sections.get('previous_experience'):
+                story.append(Paragraph("<b>PREVIOUS ROLES</b>", prof_styles['SubSectionHeading']))
+                story.append(Spacer(1, 0.1*inch))
+                self._add_summarized_previous_roles(story, individual_sections['previous_experience'], prof_styles)
+                story.append(Spacer(1, 0.2*inch))
+            
+            # 6. Additional Information Table (if any additional info exists)
+            # This would be added if we had certifications, awards, etc.
+            
+            # Build PDF
+            doc.build(story)
+            
+            logger.info(f"Structured CV PDF created successfully: {output_path}")
+            return str(output_path)
+            
+        except Exception as e:
+            logger.error(f"Error creating structured CV PDF: {e}")
+            raise e
+    
+    def _create_structured_styles(self, colors: Dict) -> Dict:
+        """Create professional styles for structured CV layout"""
+        styles = {}
+        
+        # Contact header - single line
+        styles['ContactHeader'] = ParagraphStyle(
+            'ContactHeader',
+            parent=self.styles['Normal'],
+            fontSize=11,
+            textColor=colors['primary'],
+            alignment=TA_CENTER,
+            spaceAfter=0
+        )
+        
+        # Section headings
+        styles['SectionHeading'] = ParagraphStyle(
+            'SectionHeading',
+            parent=self.styles['Heading2'],
+            fontSize=12,
+            textColor=colors['primary'],
+            spaceBefore=0,
+            spaceAfter=0,
+            leftIndent=0
+        )
+        
+        # Sub-section headings
+        styles['SubSectionHeading'] = ParagraphStyle(
+            'SubSectionHeading',
+            parent=self.styles['Heading3'],
+            fontSize=11,
+            textColor=colors['primary'],
+            spaceBefore=0,
+            spaceAfter=0,
+            leftIndent=0
+        )
+        
+        # Summary text
+        styles['SummaryText'] = ParagraphStyle(
+            'SummaryText',
+            parent=self.styles['Normal'],
+            fontSize=10,
+            textColor=black,
+            alignment=TA_JUSTIFY,
+            leftIndent=0
+        )
+        
+        # Job header
+        styles['JobHeader'] = ParagraphStyle(
+            'JobHeader',
+            parent=self.styles['Normal'],
+            fontSize=10,
+            textColor=colors['secondary'],
+            spaceBefore=0,
+            spaceAfter=0
+        )
+        
+        # Bullet points
+        styles['BulletText'] = ParagraphStyle(
+            'BulletText',
+            parent=self.styles['Normal'],
+            fontSize=9,
+            textColor=black,
+            leftIndent=15,
+            bulletIndent=5,
+            spaceBefore=4,
+            spaceAfter=4
+        )
+        
+        return styles
+    
+    def _clean_text_content(self, content: str) -> str:
+        """Clean and format text content for PDF"""
+        if not content:
+            return ""
+        
+        # Remove markdown formatting
+        content = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', content)
+        content = re.sub(r'\*(.*?)\*', r'<i>\1</i>', content)
+        
+        # Remove excessive whitespace
+        content = re.sub(r'\n\s*\n', '\n', content)
+        content = content.strip()
+        
+        return content
+    
+    def _add_structured_skills_boxes(self, story: List, skills_text: str, styles: Dict, colors: Dict):
+        """Add skills in individual colored boxes, multiple boxes per row"""
+        # Extract skills from the generated content
+        skills = self._extract_skills_list(skills_text)
+        
+        # Get the actual color values - colors dict contains HexColor objects
+        bg_color = colors.get('secondary', HexColor('#20B2AA'))
+        text_color = HexColor('#FFFFFF')
+        
+        # Create individual skill boxes in rows
+        max_skills_per_row = 4
+        for i in range(0, len(skills), max_skills_per_row):
+            row_skills = skills[i:i+max_skills_per_row]
+            
+            # Create table with individual cells for each skill
+            table_data = [row_skills]
+            
+            # Calculate column widths dynamically based on number of skills in row
+            num_skills_in_row = len(row_skills)
+            total_width = 6.5 * inch  # Total available width
+            col_width = total_width / max_skills_per_row  # Fixed width for consistent alignment
+            
+            # Create columns list - empty columns for missing skills
+            col_widths = [col_width] * max_skills_per_row
+            
+            # Pad with empty strings if needed
+            while len(row_skills) < max_skills_per_row:
+                row_skills.append("")
+            
+            skill_table = Table([row_skills], colWidths=col_widths)
+            
+            # Apply styling to create individual boxes
+            table_style = []
+            for col in range(num_skills_in_row):
+                if row_skills[col]:  # Only style non-empty cells
+                    table_style.extend([
+                        ('BACKGROUND', (col, 0), (col, 0), bg_color),
+                        ('TEXTCOLOR', (col, 0), (col, 0), text_color),
+                        ('ALIGN', (col, 0), (col, 0), 'CENTER'),
+                        ('VALIGN', (col, 0), (col, 0), 'MIDDLE'),
+                        ('FONTNAME', (col, 0), (col, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (col, 0), (col, 0), 9),
+                        ('TOPPADDING', (col, 0), (col, 0), 6),
+                        ('BOTTOMPADDING', (col, 0), (col, 0), 6),
+                        ('LEFTPADDING', (col, 0), (col, 0), 8),
+                        ('RIGHTPADDING', (col, 0), (col, 0), 8),
+                        ('BOX', (col, 0), (col, 0), 1, bg_color)
+                    ])
+            
+            skill_table.setStyle(TableStyle(table_style))
+            
+            story.append(skill_table)
+            story.append(Spacer(1, 0.1*inch))
+    
+    def _extract_skills_list(self, skills_text: str) -> List[str]:
+        """Extract individual skills from generated skills content"""
+        skills = []
+        if not skills_text:
+            return skills
+        
+        lines = skills_text.strip().split('\n')
+        for line in lines:
+            line = line.strip()
+            if line:
+                # Remove bullets and formatting
+                line = re.sub(r'^[\-\•\*\+]\s*', '', line)
+                line = re.sub(r'\*\*(.*?)\*\*', r'\1', line)  # Remove markdown bold
+                
+                # Split by common separators
+                if '|' in line:
+                    row_skills = [skill.strip() for skill in line.split('|') if skill.strip()]
+                    skills.extend(row_skills)
+                elif ',' in line:
+                    row_skills = [skill.strip() for skill in line.split(',') if skill.strip()]
+                    skills.extend(row_skills)
+                else:
+                    skills.append(line)
+        
+        return skills[:10]  # Limit to top 10 skills
+    
+    def _add_sar_experience_bullets(self, story: List, experience_text: str, styles: Dict):
+        """Add 8 SAR bullets with bold headings for current role"""
+        bullets = self._extract_sar_bullets(experience_text)
+        
+        for bullet in bullets[:8]:  # Exactly 8 bullets
+            # Clean bullet text of asterisk characters
+            clean_bullet = self._clean_bullet_text(bullet)
+            
+            # Format SAR bullet with bold heading
+            if ':' in clean_bullet:
+                heading, description = clean_bullet.split(':', 1)
+                heading = heading.strip()
+                description = description.strip()
+                formatted_bullet = f"• <b>{heading}:</b> {description}"
+            else:
+                formatted_bullet = f"• {clean_bullet}"
+            
+            story.append(Paragraph(formatted_bullet, styles['BulletText']))
+    
+    def _extract_sar_bullets(self, experience_text: str) -> List[str]:
+        """Extract SAR formatted bullets from experience text"""
+        bullets = []
+        if not experience_text:
+            return bullets
+        
+        lines = experience_text.strip().split('\n')
+        for line in lines:
+            line = line.strip()
+            if line and (':' in line or len(line) > 20):  # SAR bullets or substantial content
+                # Clean existing bullet formatting
+                line = re.sub(r'^[\-\•\*\+]\s*', '', line)
+                bullets.append(line)
+        
+        return bullets
+    
+    def _clean_bullet_text(self, bullet_text: str) -> str:
+        """Clean bullet text by removing asterisk characters and other formatting"""
+        if not bullet_text:
+            return ""
+        
+        # Remove single and double asterisks (markdown formatting)
+        cleaned = re.sub(r'\*\*', '', bullet_text)  # Remove double asterisks
+        cleaned = re.sub(r'\*', '', cleaned)        # Remove single asterisks
+        
+        # Remove other common markdown formatting
+        cleaned = re.sub(r'__', '', cleaned)        # Remove double underscores
+        cleaned = re.sub(r'_', '', cleaned)         # Remove single underscores
+        
+        # Clean up extra spaces
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        
+        return cleaned
+    
+    def _add_summarized_previous_roles(self, story: List, previous_text: str, styles: Dict):
+        """Add previous roles with 3-4 bullets max per role"""
+        if not previous_text:
+            return
+            
+        # Clean and parse the text into lines
+        cleaned_text = self._clean_text_content(previous_text)
+        lines = [line.strip() for line in cleaned_text.split('\n') if line.strip()]
+        
+        current_role = None
+        current_company = None
+        bullet_count = 0
+        max_bullets_per_role = 4
+        
+        for line in lines:
+            # Check if this is a role/company line (contains |)
+            if '|' in line and not line.startswith(('•', '-', '*', '**')):
+                # Parse job title and company
+                parts = line.split('|')
+                if len(parts) >= 2:
+                    current_role = parts[0].strip()
+                    current_company = parts[1].strip()
+                    bullet_count = 0  # Reset bullet count for new role
+                    
+                    # Add role header
+                    role_line = f"<b>{current_role}</b> | {current_company}"
+                    story.append(Paragraph(role_line, styles['JobTitle']))
+                    story.append(Spacer(1, 0.05*inch))
+                    
+            # Check if this is a bullet point
+            elif line.startswith(('•', '-', '*', '**')) and bullet_count < max_bullets_per_role:
+                # Clean the bullet text
+                clean_bullet = self._clean_bullet_text(line)
+                if clean_bullet:
+                    # Remove bullet marker and create formatted bullet
+                    bullet_text = clean_bullet.lstrip('•-*').strip()
+                    if bullet_text:
+                        story.append(Paragraph(f"• {bullet_text}", styles['BulletText']))
+                        bullet_count += 1
+            
+            # If line doesn't have bullet marker but looks like content, treat as bullet
+            elif current_role and bullet_count < max_bullets_per_role and len(line) > 10:
+                clean_bullet = self._clean_bullet_text(line)
+                if clean_bullet:
+                    story.append(Paragraph(f"• {clean_bullet}", styles['BulletText']))
+                    bullet_count += 1
+        
+        # Add some spacing after previous roles
+        story.append(Spacer(1, 0.1*inch))
 
 @st.cache_resource
 def get_pdf_exporter():
