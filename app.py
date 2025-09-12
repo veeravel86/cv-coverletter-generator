@@ -921,31 +921,64 @@ BEGIN."""
             st.error(f"❌ Error generating experience bullets: {str(e)}")
 
 def generate_executive_summary(llm_service, context_builder):
-    """Generate executive summary with expandable display"""
+    """Generate executive summary with expandable display using professional ATS-optimized prompt"""
     
     with st.spinner("📊 Generating executive summary..."):
         try:
-            # Get relevant context from vector store
-            context = context_builder.build_context("professional summary career objective experience background")
+            # Get job description context
+            job_context = context_builder.build_context("job description requirements responsibilities qualifications leadership")
             
-            prompt = f"""
-Based on the following context, create a powerful executive summary (30-40 words maximum).
+            # Get experience superset context
+            experience_context = context_builder.build_context("professional summary career experience background achievements leadership")
+            
+            prompt = f"""You are an expert CV writer and ATS optimizer for senior engineering leadership roles.
 
-Context:
-{context}
+GOAL
+Read two attached input files (PDFs):
+- FILE 1: Job_Description.pdf → complete job description
+- FILE 2: CV_ExperienceSummary_Skills_Superset - Google Docs.pdf → my full "experience superset"
 
-Requirements:
-- Maximum 40 words
-- Executive-level, results-oriented tone
-- Highlight key value proposition and expertise
-- Include years of experience if apparent
-- Use impactful, professional language
-- No first-person pronouns
-- Focus on what you bring to an organization
-- Include industry or functional expertise
+JOB DESCRIPTION CONTEXT:
+{job_context}
 
-The summary should capture the essence of a senior professional's career value.
-"""
+EXPERIENCE SUPERSET CONTEXT:
+{experience_context}
+
+Produce ONE high-impact **Career Summary** (≤40 words) that:
+- Is written in a polished, executive tone.
+- Directly aligns with the JD using keywords naturally.
+- Demonstrates leadership scope, technical expertise, and business impact.
+- Prioritises mission-critical competencies stated or implied in the JD.
+- Is concise, powerful, and ATS-friendly.
+
+SUMMARY RULES
+- ≤40 words, single paragraph.
+- No first-person pronouns, fluff, or vague adjectives.
+- Integrate the highest-priority keywords from the JD.
+- Highlight leadership scale, strategic contributions, and technical breadth.
+- Use international English unless the JD uses US spelling.
+
+PRIORITY RULES
+1. Core leadership and engineering competencies the JD emphasises.
+2. High-frequency JD keywords and themes.
+3. Strategic differentiators (e.g., AI adoption, vendor mgmt, cloud cost optimisation) supported by my Superset.
+
+PROCESS (internal, do NOT include in output)
+1. Parse the JD → extract repeated competencies, seniority level, domain focus, and business goals.
+2. Parse the Superset → map accomplishments and skills.
+3. Select only the highest-priority elements.
+4. Craft a concise, impactful executive summary using JD language.
+5. Final pass: tighten wording to ≤40 words; ensure ATS optimisation.
+
+OUTPUT FORMAT (strict)
+- Output ONLY the single summary text in one paragraph, ≤40 words.
+- No labels, no headings, no commentary.
+
+QUALITY BAR
+- Pretend this will sit at the top of a CTO-level CV and be scanned by ATS and executive recruiters.
+- Ensure clarity, measurable leadership impact, and keyword relevance.
+
+BEGIN."""
             
             response = llm_service.generate_content(prompt, max_tokens=200)
             
@@ -956,10 +989,13 @@ The summary should capture the essence of a senior professional's career value.
             
             # Display with expander
             with st.expander("📊 Executive Summary - Click to expand", expanded=True):
-                st.markdown("### Generated Executive Summary")
-                st.markdown(f"*{response.strip()}*")
-                word_count = len(response.split())
-                st.caption(f"📝 Word count: {word_count} words (target: ≤40 words)")
+                st.markdown("### Generated Career Summary")
+                st.markdown("*Executive-level summary aligned with JD requirements and optimized for ATS*")
+                st.markdown("---")
+                # Display the summary in a highlighted box
+                st.info(f"**{response.strip()}**")
+                word_count = len(response.strip().split())
+                st.caption(f"📊 Word count: {word_count} words (target: ≤40 words) | 🎯 CTO-level executive tone")
             
         except Exception as e:
             st.error(f"❌ Error generating executive summary: {str(e)}")
