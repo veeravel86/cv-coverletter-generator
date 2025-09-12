@@ -100,39 +100,60 @@ def main():
 
 def handle_document_upload():
     st.header("📄 Document Upload & Processing")
+    st.markdown("Upload four separate documents for comprehensive CV generation")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("Job Description")
+        st.subheader("🎯 Job Description")
         job_description = st.file_uploader(
-            "Upload Job_Description.pdf",
+            "Upload Job Description PDF",
             type=['pdf'],
             key="job_description",
-            help="The target job description PDF"
+            help="The target job description you're applying for"
+        )
+        
+        st.subheader("💼 Experience Document") 
+        experience_doc = st.file_uploader(
+            "Upload Experience Superset PDF",
+            type=['pdf'],
+            key="experience_doc",
+            help="Document containing all your work experience and achievements"
         )
     
     with col2:
-        st.subheader("Experience Superset")
-        superset = st.file_uploader(
-            "Upload CV_ExperienceSummary_Skills_Superset.pdf", 
+        st.subheader("🛠️ Skills Document")
+        skills_doc = st.file_uploader(
+            "Upload Skills Superset PDF",
             type=['pdf'],
-            key="superset",
-            help="Your comprehensive experience and skills document"
+            key="skills_doc", 
+            help="Document containing all your technical and soft skills"
         )
-    
-    with col3:
-        st.subheader("Sample CV Style")
+        
+        st.subheader("📋 Sample CV")
         sample_cv = st.file_uploader(
-            "Upload Sample_CV.pdf",
+            "Upload Sample CV PDF",
             type=['pdf'],
             key="sample_cv",
-            help="CV to mimic the formatting style from"
+            help="CV whose formatting style you want to mimic"
         )
     
+    # Show upload status
+    uploaded_files = [job_description, experience_doc, skills_doc, sample_cv]
+    file_names = ["Job Description", "Experience Document", "Skills Document", "Sample CV"]
+    
+    st.markdown("### Upload Status:")
+    upload_cols = st.columns(4)
+    for i, (file, name) in enumerate(zip(uploaded_files, file_names)):
+        with upload_cols[i]:
+            if file:
+                st.success(f"✅ {name}")
+            else:
+                st.error(f"❌ {name}")
+    
     if st.button("🔄 Process Documents", type="primary"):
-        if not all([job_description, superset, sample_cv]):
-            st.error("❌ Please upload all three PDF files")
+        if not all(uploaded_files):
+            st.error("❌ Please upload all four PDF files")
             return
         
         with st.spinner("Processing documents..."):
@@ -141,7 +162,8 @@ def handle_document_upload():
                 
                 uploaded_files = {
                     "job_description": job_description,
-                    "superset": superset,
+                    "experience_doc": experience_doc,
+                    "skills_doc": skills_doc,
                     "sample_cv": sample_cv
                 }
                 

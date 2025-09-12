@@ -287,6 +287,103 @@ Raw skills text to process:
             logger.error(f"Error structuring skills content with LLM: {e}")
             return raw_text  # Fallback to original text
     
+    def structure_experience_content(self, raw_text: str) -> str:
+        """Use LLM to structure experience document content with proper headings"""
+        try:
+            prompt = """
+CRITICAL INSTRUCTIONS: You are a formatting assistant. Your ONLY job is to organize existing work experience content under proper headings.
+
+STRICT RULES:
+- DO NOT remove, delete, or omit ANY information from the original text
+- DO NOT change the meaning or content of any sentences
+- DO NOT summarize or paraphrase any content
+- DO NOT add new information that wasn't in the original
+- PRESERVE all dates, numbers, company names, achievements, and details exactly as written
+- Your job is ONLY to organize and format, not to edit content
+
+TASK: Take all the text provided and organize it under appropriate headings for work experience:
+- WORK EXPERIENCE or PROFESSIONAL EXPERIENCE
+- PROJECT EXPERIENCE (if applicable)
+- INTERNSHIPS (if applicable)
+- CONSULTING EXPERIENCE (if applicable)
+
+FORMATTING:
+- Use ALL CAPS for section headings
+- Use • for bullet points
+- Keep all original content exactly as provided
+- Only remove obvious PDF artifacts (repeated characters, page numbers)
+- Focus only on work-related experience content
+
+Raw experience text to process:
+"""
+
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a formatting assistant. Organize work experience content under headings without changing any information. Preserve all content exactly as provided."},
+                    {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
+                ],
+                temperature=0.0,
+                max_tokens=4000
+            )
+            
+            structured_content = response.choices[0].message.content.strip()
+            return structured_content
+            
+        except Exception as e:
+            logger.error(f"Error structuring experience content with LLM: {e}")
+            return raw_text  # Fallback to original text
+    
+    def structure_skills_content(self, raw_text: str) -> str:
+        """Use LLM to structure skills document content with proper headings"""
+        try:
+            prompt = """
+CRITICAL INSTRUCTIONS: You are a formatting assistant. Your ONLY job is to organize existing skills content under proper headings.
+
+STRICT RULES:
+- DO NOT remove, delete, or omit ANY information from the original text
+- DO NOT change the meaning or content of any sentences
+- DO NOT summarize or paraphrase any content
+- DO NOT add new information that wasn't in the original
+- PRESERVE all skill names, technologies, and details exactly as written
+- Your job is ONLY to organize and format, not to edit content
+
+TASK: Take all the text provided and organize it under appropriate headings for skills:
+- TECHNICAL SKILLS
+- PROGRAMMING LANGUAGES
+- FRAMEWORKS & LIBRARIES
+- TOOLS & TECHNOLOGIES
+- SOFT SKILLS
+- CERTIFICATIONS (if applicable)
+- LANGUAGES (if applicable)
+
+FORMATTING:
+- Use ALL CAPS for section headings
+- Use • for bullet points or keep original formatting
+- Keep all original content exactly as provided
+- Only remove obvious PDF artifacts (repeated characters, page numbers)
+- Focus only on skills-related content
+
+Raw skills text to process:
+"""
+
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a formatting assistant. Organize skills content under headings without changing any information. Preserve all content exactly as provided."},
+                    {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
+                ],
+                temperature=0.0,
+                max_tokens=4000
+            )
+            
+            structured_content = response.choices[0].message.content.strip()
+            return structured_content
+            
+        except Exception as e:
+            logger.error(f"Error structuring skills content with LLM: {e}")
+            return raw_text  # Fallback to original text
+    
     def create_documents(self, texts: Dict[str, str]) -> List[Document]:
         documents = []
         for doc_type, text in texts.items():
@@ -334,17 +431,17 @@ Raw skills text to process:
                             processed_texts[doc_type] = processed_text
                             st.success(f"✅ {doc_type} structured with proper headings ({len(processed_text)} characters)")
                     
-                    elif doc_type == "experience_superset" and raw_text:
-                        with st.spinner("🤖 Structuring experience superset content..."):
-                            processed_text = self.structure_experience_superset_content(raw_text)
+                    elif doc_type == "experience_doc" and raw_text:
+                        with st.spinner("🤖 Structuring experience document content..."):
+                            processed_text = self.structure_experience_content(raw_text)
                             processed_texts[doc_type] = processed_text
-                            st.success(f"✅ {doc_type} structured with proper headings ({len(processed_text)} characters)")
+                            st.success(f"✅ Experience document structured with proper headings ({len(processed_text)} characters)")
                     
-                    elif doc_type == "skills_superset" and raw_text:
-                        with st.spinner("🤖 Structuring skills superset content..."):
-                            processed_text = self.structure_skills_superset_content(raw_text)
+                    elif doc_type == "skills_doc" and raw_text:
+                        with st.spinner("🤖 Structuring skills document content..."):
+                            processed_text = self.structure_skills_content(raw_text)
                             processed_texts[doc_type] = processed_text
-                            st.success(f"✅ {doc_type} structured with proper headings ({len(processed_text)} characters)")
+                            st.success(f"✅ Skills document structured with proper headings ({len(processed_text)} characters)")
                     
                     else:
                         processed_texts[doc_type] = raw_text
