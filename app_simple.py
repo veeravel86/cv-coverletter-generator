@@ -13,6 +13,7 @@ from services.llm import get_llm_service
 from services.style_extract import get_style_extractor
 from services.skills_generator import get_skills_generator
 from services.experience_generator import get_experience_generator
+from services.summary_generator import get_summary_generator
 from exporters.pdf_export import get_pdf_exporter
 
 load_dotenv()
@@ -309,6 +310,7 @@ def generate_cv(llm_service, context_builder):
             # Initialize generators
             skills_generator = get_skills_generator()
             experience_generator = get_experience_generator()
+            summary_generator = get_summary_generator()
             
             job_description = processed_texts.get("job_description", "")
             experience_superset = processed_texts.get("experience_superset", "")
@@ -338,8 +340,49 @@ def generate_cv(llm_service, context_builder):
                     else:
                         st.warning(f"⚠️ Experience generation: {experience_result['validation_message']}")
             
+            # Phase 3: Generate professional summary
+            summary_result = None
+            if job_description and (experience_superset or skills_superset):
+                with st.spinner("📝 Generating executive professional summary..."):
+                    summary_result = summary_generator.generate_professional_summary(
+                        job_description, experience_superset, skills_superset
+                    )
+                    
+                    if summary_result["valid"]:
+                        st.success(f"✅ Generated professional summary ({summary_result['word_count']}/30 words)")
+                    else:
+                        st.warning(f"⚠️ Summary generation: {summary_result['validation_message']}")
+            
             # Show generated content in expandable UI
             st.subheader("🔍 Generated Content Preview")
+            
+            # Professional Summary at the top (full width if generated)
+            if summary_result and summary_result["summary"]:
+                with st.expander("📝 **Generated Professional Summary**", expanded=True):
+                    st.markdown(f"**Executive Summary (≤30 words):**")
+                    st.info(f"📋 {summary_result['summary']}")
+                    
+                    # Summary analysis
+                    analysis = summary_generator.get_summary_analysis(
+                        summary_generator._process_summary_response(summary_result['summary'], job_description),
+                        job_description
+                    )
+                    
+                    col_s1, col_s2, col_s3 = st.columns(3)
+                    with col_s1:
+                        st.metric("Word Count", f"{analysis['word_count']}/{analysis['max_words']}")
+                        st.caption(analysis['compliance'])
+                    with col_s2:
+                        st.metric("JD Keywords", "Present" if summary_result['has_keywords'] else "Limited")
+                        st.caption(analysis['keyword_integration'])
+                    with col_s3:
+                        st.metric("Tone Score", analysis['tone_score'])
+                        st.caption(analysis['tone_assessment'])
+                    
+                    if analysis['executive_ready']:
+                        st.success("🎯 Executive-ready summary")
+                    else:
+                        st.warning("⚠️ May need refinement")
             
             col1, col2 = st.columns(2)
             
@@ -388,7 +431,7 @@ def generate_cv(llm_service, context_builder):
             # Build context for CV generation
             context = context_builder.build_cv_generation_context()
             
-            # Create comprehensive CV prompt with generated skills and experience
+            # Create comprehensive CV prompt with generated components
             formatted_skills = skills_generator.format_skills_for_cv(skills_result["skills"], "bullet")
             
             formatted_experience = ""
@@ -397,6 +440,10 @@ def generate_cv(llm_service, context_builder):
                     experience_result["bullets"], "standard"
                 )
             
+            generated_summary = ""
+            if summary_result and summary_result["summary"]:
+                generated_summary = summary_result["summary"]
+            
             cv_prompt = f"""You are a professional CV writer creating an ATS-optimized resume for a senior engineering role.
 
 TASK: Create a complete, professional CV using the provided context and pre-generated optimized components.
@@ -404,12 +451,13 @@ TASK: Create a complete, professional CV using the provided context and pre-gene
 REQUIRED SECTIONS:
 1. **CONTACT INFORMATION** - Name, email, phone, location (placeholder format)
 
-2. **PROFESSIONAL SUMMARY** - 3-4 lines highlighting key qualifications and value proposition
+2. **PROFESSIONAL SUMMARY** - {"Use this exact pre-generated executive summary:" if generated_summary else "Create 2-3 lines highlighting key qualifications and value proposition"}
+{generated_summary if generated_summary else ""}
 
 3. **CORE SKILLS** - Use EXACTLY these optimized skills:
 {formatted_skills}
 
-4. **PROFESSIONAL EXPERIENCE** - {"Use these pre-generated experience bullets:" if formatted_experience else "3-4 most relevant roles with achievement-focused bullets"}
+4. **PROFESSIONAL EXPERIENCE** - {"Use these pre-generated SAR format experience bullets:" if formatted_experience else "3-4 most relevant roles with achievement-focused bullets"}
 {formatted_experience if formatted_experience else "   - Company, job title, dates (MM/YYYY - MM/YYYY format)\n   - 3-4 achievement-focused bullet points per role\n   - Quantified results where possible\n   - Keywords from job description"}
 
 5. **EDUCATION** - Degree, institution, year (extract from context)
@@ -440,8 +488,10 @@ Generate a complete, professional CV that will pass ATS scanning and impress hir
                 st.session_state.generated_skills = skills_result
                 if experience_result:
                     st.session_state.generated_experience = experience_result
+                if summary_result:
+                    st.session_state.generated_summary = summary_result
                 
-                st.success("✅ Complete CV generated successfully!")
+                st.success("✅ Complete ATS-optimized CV generated successfully!")
                 
                 # Display final CV
                 st.subheader("📄 Complete Generated CV")
@@ -455,15 +505,20 @@ Generate a complete, professional CV that will pass ATS scanning and impress hir
                 with final_col2:
                     st.subheader("📊 Generation Summary")
                     
+                    # Component counts
                     st.metric("Skills Generated", skills_result["skill_count"])
                     if experience_result:
                         st.metric("Experience Bullets", experience_result["bullet_count"])
+                    if summary_result:
+                        st.metric("Summary Words", f"{summary_result['word_count']}/30")
                     st.metric("Total Word Count", len(result["content"].split()))
                     
                     # Quality indicators
                     st.divider()
+                    st.subheader("🎯 Quality Indicators")
+                    
                     if skills_result["valid"]:
-                        st.success("✅ Skills Optimized")
+                        st.success("✅ Skills ATS-Optimized")
                     else:
                         st.warning("⚠️ Skills Partial")
                         
@@ -473,6 +528,13 @@ Generate a complete, professional CV that will pass ATS scanning and impress hir
                         st.warning("⚠️ Experience Partial")
                     else:
                         st.info("ℹ️ Basic Experience Used")
+                    
+                    if summary_result and summary_result["valid"]:
+                        st.success("✅ Executive Summary")
+                    elif summary_result:
+                        st.warning("⚠️ Summary Needs Review")
+                    else:
+                        st.info("ℹ️ Basic Summary Used")
             
         except Exception as e:
             st.error(f"❌ **CV Generation Failed**")
