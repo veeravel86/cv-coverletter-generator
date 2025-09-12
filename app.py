@@ -70,14 +70,8 @@ def main():
             help="Individual CV sections and complete CV generation available in Generate tab"
         )
         
-        output_format = st.multiselect(
-            "Export Formats",
-            ["PDF (.pdf)", "Word (.docx)"],
-            default=["PDF (.pdf)", "Word (.docx)"],
-            help="Select output formats for download"
-        )
     
-    tab1, tab2, tab3, tab4 = st.tabs(["📄 Upload & Process", "🤖 Generate", "📊 Validate", "💾 Export"])
+    tab1, tab2 = st.tabs(["📄 Upload & Process", "🤖 Generate"])
     
     with tab1:
         handle_document_upload()
@@ -87,18 +81,6 @@ def main():
             handle_generation(generation_mode)
         else:
             st.info("👆 Please upload and process documents first")
-    
-    with tab3:
-        if st.session_state.get('whole_cv_content') or st.session_state.generated_cover_letter:
-            handle_validation()
-        else:
-            st.info("👆 Please generate content first")
-    
-    with tab4:
-        if st.session_state.get('whole_cv_content') or st.session_state.generated_cover_letter:
-            handle_export(output_format)
-        else:
-            st.info("👆 Please generate content first")
 
 def handle_document_upload():
     st.header("📄 Document Upload & Processing")
@@ -366,7 +348,7 @@ def handle_generation(generation_mode):
                 st.info("ℹ️ Previous Experience (Optional)")
         
         # Generate button
-        generate_whole_cv_cols = st.columns([1, 1])
+        generate_whole_cv_cols = st.columns([1, 1, 1])
         with generate_whole_cv_cols[0]:
             if st.button("🎯 Generate Whole CV", type="primary", help="Create complete professional CV"):
                 generate_whole_cv(llm_service, context_builder, name, email, phone, location, linkedin, website)
@@ -375,6 +357,28 @@ def handle_generation(generation_mode):
             if 'whole_cv_content' in st.session_state and st.session_state.whole_cv_content:
                 if st.button("👁️ Preview CV", help="Preview the complete CV before download"):
                     show_cv_preview()
+        
+        with generate_whole_cv_cols[2]:
+            if 'whole_cv_content' in st.session_state and st.session_state.whole_cv_content:
+                if st.button("📄 Generate PDF", type="secondary", help="Generate CV as PDF for download"):
+                    with st.spinner("📄 Generating PDF..."):
+                        pdf_data = generate_cv_pdf()
+                        if pdf_data:
+                            st.session_state['pdf_data'] = pdf_data
+                            st.session_state['pdf_name'] = f"CV_{st.session_state.whole_cv_contact.get('name', 'Document').replace(' ', '_')}.pdf"
+                            st.success("✅ PDF generated successfully!")
+                            st.rerun()
+        
+        # Download button (only show if PDF is ready)
+        if 'pdf_data' in st.session_state and st.session_state['pdf_data']:
+            st.download_button(
+                label="💾 Download CV PDF",
+                data=st.session_state['pdf_data'],
+                file_name=st.session_state.get('pdf_name', 'CV.pdf'),
+                mime="application/pdf",
+                type="primary",
+                use_container_width=True
+            )
     
     else:
         st.info("📝 Please generate at least 2 individual sections (Executive Summary, Skills, or Experience Bullets) before creating the whole CV")
@@ -474,85 +478,6 @@ STACK TRACE:
             
             return None
 
-def handle_validation():
-    st.header("📊 Content Validation & Analysis")
-    
-    text_processor = TextProcessor()
-    validator = ContentValidator()
-    
-    if st.session_state.get('whole_cv_content'):
-        st.subheader("📄 Complete CV Analysis")
-        
-        cv_content = st.session_state.whole_cv_content
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            stats = text_processor.get_text_stats(cv_content)
-            st.metric("Total Words", stats.word_count)
-            st.metric("Bullets Found", stats.bullet_count)
-        
-        with col2:
-            career_summary = text_processor.extract_section_content(cv_content, "CAREER SUMMARY")
-            if career_summary:
-                summary_validation = validator.validate_career_summary(career_summary)
-                color = "🟢" if summary_validation["valid"] else "🔴"
-                st.metric(
-                    "Career Summary",
-                    f"{summary_validation['word_count']}/40 words",
-                    delta=None if summary_validation["valid"] else f"+{summary_validation['word_count'] - 40}"
-                )
-        
-        with col3:
-            bullets = text_processor.extract_bullets(cv_content)
-            sar_validation = text_processor.validate_sar_format(bullets)
-            st.metric("SAR Bullets", f"{sar_validation['sar_formatted']}/8")
-            st.metric("Two-Word Headings", f"{sar_validation['two_word_headings']}/8")
-    
-    if st.session_state.generated_cover_letter:
-        st.subheader("📝 Cover Letter Analysis")
-        
-        cover_letter_content = st.session_state.generated_cover_letter
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            stats = text_processor.get_text_stats(cover_letter_content)
-            st.metric("Word Count", f"{stats.word_count}/250")
-        
-        with col2:
-            st.metric("Paragraphs", stats.paragraph_count)
-        
-        with col3:
-            validation = validator.validate_cover_letter(cover_letter_content)
-            color = "🟢" if validation["valid"] else "🔴"
-            st.metric("Validation", "✅ Pass" if validation["valid"] else "❌ Fail")
-
-def handle_export(output_formats):
-    st.header("💾 Export & Download")
-    
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = Path("outputs")
-    output_dir.mkdir(exist_ok=True)
-    
-    if st.session_state.get('whole_cv_content'):
-        st.subheader("📄 Complete CV Export")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("📝 Apply Sample CV Style", help="Format CV to match Sample CV style"):
-                apply_cv_styling()
-        
-        with col2:
-            if st.button("🔄 Regenerate Exports"):
-                generate_all_exports(timestamp, output_formats)
-        
-        download_exports("cv", timestamp, output_formats)
-    
-    if st.session_state.generated_cover_letter:
-        st.subheader("📝 Cover Letter Export")
-        download_exports("cover_letter", timestamp, output_formats)
 
 def apply_cv_styling():
     if not st.session_state.style_profile:
@@ -1326,15 +1251,23 @@ def generate_whole_cv(llm_service, context_builder, name, email, phone, location
                 'has_contact': bool(contact_info.strip()),
                 'has_summary': bool(formatted_summary.strip()),
                 'has_skills': bool(formatted_skills.strip()),
-                'has_experience': bool(formatted_current_experience.strip())
+                'has_experience': bool(formatted_current_experience.strip()),
+                'experience_length': len(formatted_current_experience) if formatted_current_experience else 0,
+                'raw_bullets_length': len(experience_bullets) if experience_bullets else 0
             }
             
             st.success("✅ Complete CV generated successfully!")
             st.info("👁️ Click 'Preview CV' to review before downloading PDF")
             
-            # Show content summary in debug mode
-            with st.expander("🔍 Content Summary (Debug)", expanded=False):
+            # Add debug info for troubleshooting
+            with st.expander("🐛 Debug Info (Content Summary)", expanded=False):
                 st.json(content_summary)
+                if experience_bullets:
+                    st.markdown("**Raw Experience Bullets:**")
+                    st.text(experience_bullets[:200] + "..." if len(experience_bullets) > 200 else experience_bullets)
+                if formatted_current_experience:
+                    st.markdown("**Formatted Current Experience:**")
+                    st.text(formatted_current_experience[:300] + "..." if len(formatted_current_experience) > 300 else formatted_current_experience)
             
         except Exception as e:
             st.error(f"❌ Error generating complete CV: {str(e)}")
@@ -1421,23 +1354,39 @@ def format_skills_section(skills_text):
 
 def format_current_experience(experience_text):
     """Format current role experience with detailed 8 bullets"""
-    if not experience_text:
+    if not experience_text or not experience_text.strip():
         return ""
     
     # Extract and format the 8 SAR bullets
     bullets = extract_experience_bullets(experience_text)
     
+    if not bullets:
+        # If extraction failed, try to use the raw text as bullets
+        lines = [line.strip() for line in experience_text.split('\n') if line.strip()]
+        bullets = [line for line in lines if len(line) > 10][:8]
+    
     formatted_bullets = []
     for bullet in bullets[:8]:  # Ensure exactly 8 bullets
-        if ":" in bullet:
+        if ":" in bullet and not bullet.startswith("**"):
+            # Format SAR bullets with two-word headings
             heading, description = bullet.split(":", 1)
-            formatted_bullets.append(f"• **{heading.strip()}**: {description.strip()}")
+            # Clean heading of any existing formatting
+            heading = heading.replace("**", "").strip()
+            formatted_bullets.append(f"• **{heading}**: {description.strip()}")
+        elif ":" in bullet and bullet.startswith("**"):
+            # Already formatted heading
+            formatted_bullets.append(f"• {bullet}")
         else:
+            # Simple bullet without heading
             formatted_bullets.append(f"• {bullet}")
     
     bullets_formatted = "\n".join(formatted_bullets)
     
-    # Add a generic current role title (this could be enhanced with job description parsing)
+    # Ensure we have content
+    if not bullets_formatted.strip():
+        return f"**PROFESSIONAL EXPERIENCE**\n\n**Current Role** | Present\n\n• Experience details will be added here"
+    
+    # Add professional experience section header
     return f"**PROFESSIONAL EXPERIENCE**\n\n**Current Role** | Present\n\n{bullets_formatted}"
 
 def format_previous_experience(prev_exp_text):
@@ -1523,19 +1472,34 @@ def extract_experience_bullets(experience_text):
     """Extract experience bullets from generated text"""
     import re
     
+    if not experience_text or not experience_text.strip():
+        return []
+    
     cleaned = clean_generated_content(experience_text)
-    lines = cleaned.split('\n')
+    lines = [line.strip() for line in cleaned.split('\n') if line.strip()]
     
     bullets = []
     for line in lines:
-        line = line.strip()
-        if line and ('**' in line or ':' in line):
-            # Remove existing bullet points
-            line = re.sub(r'^[\-\•\*\+]\s*', '', line)
-            if line:
+        # Look for bullets with two-word headings (SAR format)
+        if ':' in line and len(line.split(':')[0].strip().split()) <= 3:
+            # Remove existing bullet points and clean
+            line = re.sub(r'^[\-\•\*\+\d\.]\s*', '', line).strip()
+            if line and not line.startswith('#'):  # Skip headers
+                bullets.append(line)
+        # Also catch any line that looks like a bullet point
+        elif re.match(r'^[\-\•\*\+]?\s*\**\w+.*?:', line):
+            line = re.sub(r'^[\-\•\*\+]\s*', '', line).strip()
+            if line and not line.startswith('#'):  # Skip headers
                 bullets.append(line)
     
-    return bullets
+    # If we still don't have bullets, be more lenient
+    if not bullets:
+        for line in lines:
+            if line and not line.startswith('#') and len(line) > 10:
+                line = re.sub(r'^[\-\•\*\+\d\.]\s*', '', line).strip()
+                bullets.append(line)
+    
+    return bullets[:8]  # Ensure max 8 bullets
 
 def assemble_complete_cv(contact, summary, skills, current_exp, previous_exp, additional_info):
     """Assemble all sections into complete CV format"""
@@ -1571,101 +1535,67 @@ def show_cv_preview():
         st.markdown(st.session_state.whole_cv_content)
         
         st.markdown("---")
-        st.caption("🎯 Professional CV ready for PDF export")
-        
-        # Add download button
-        if st.button("💾 Download as PDF", type="primary", key="download_cv_pdf"):
-            generate_cv_pdf()
+        st.caption("🎯 Professional CV preview")
 
 def generate_cv_pdf():
-    """Generate and download CV as PDF with comprehensive validation"""
+    """Generate CV as PDF and return the PDF data"""
     try:
-        with st.spinner("📄 Generating PDF..."):
-            # Validate that CV content exists and is not empty
-            if 'whole_cv_content' not in st.session_state or not st.session_state.whole_cv_content:
-                st.error("❌ No CV content available. Please generate CV first.")
-                return
+        # Validate that CV content exists and is not empty
+        if 'whole_cv_content' not in st.session_state or not st.session_state.whole_cv_content:
+            st.error("❌ No CV content available. Please generate CV first.")
+            return None
+        
+        if 'whole_cv_contact' not in st.session_state or not st.session_state.whole_cv_contact:
+            st.error("❌ No contact information available. Please generate CV first.")
+            return None
+        
+        cv_content = st.session_state.whole_cv_content.strip()
+        contact_info = st.session_state.whole_cv_contact
+        
+        # Validate content length and quality
+        if len(cv_content) < 100:
+            st.error("❌ CV content is too short to generate a meaningful PDF. Please regenerate the CV.")
+            return None
+        
+        # Check that we have essential contact information
+        if not contact_info.get('name') or not contact_info.get('email'):
+            st.error("❌ Missing essential contact information (name/email). Please regenerate CV.")
+            return None
+        
+        # Validate that CV has structured sections
+        sections_check = validate_cv_structure(cv_content)
+        if not sections_check['valid']:
+            st.error(f"❌ CV structure validation failed: {sections_check['message']}")
+            st.info("💡 Please regenerate individual sections and try again.")
+            return None
+        
+        # Generate PDF with teal color scheme
+        pdf_exporter = get_pdf_exporter()
+        pdf_path = pdf_exporter.create_professional_cv_pdf(
+            cv_content, contact_info, color_scheme="teal"
+        )
+        
+        # Validate PDF was created and has content
+        if not os.path.exists(pdf_path):
+            raise Exception("PDF file was not created")
+        
+        file_size = os.path.getsize(pdf_path)
+        if file_size < 1000:  # PDF should be at least 1KB
+            raise Exception(f"PDF file is too small ({file_size} bytes), likely empty")
+        
+        # Read and return PDF data
+        with open(pdf_path, "rb") as file:
+            pdf_data = file.read()
             
-            if 'whole_cv_contact' not in st.session_state or not st.session_state.whole_cv_contact:
-                st.error("❌ No contact information available. Please generate CV first.")
-                return
+            if len(pdf_data) < 1000:
+                raise Exception("PDF data is too small, likely corrupted or empty")
             
-            cv_content = st.session_state.whole_cv_content.strip()
-            contact_info = st.session_state.whole_cv_contact
-            
-            # Validate content length and quality
-            if len(cv_content) < 100:
-                st.error("❌ CV content is too short to generate a meaningful PDF. Please regenerate the CV.")
-                return
-            
-            # Check that we have essential contact information
-            if not contact_info.get('name') or not contact_info.get('email'):
-                st.error("❌ Missing essential contact information (name/email). Please regenerate CV.")
-                return
-            
-            # Validate that CV has structured sections
-            sections_check = validate_cv_structure(cv_content)
-            if not sections_check['valid']:
-                st.error(f"❌ CV structure validation failed: {sections_check['message']}")
-                st.info("💡 Please regenerate individual sections and try again.")
-                return
-            
-            # Generate PDF with teal color scheme
-            pdf_exporter = get_pdf_exporter()
-            pdf_path = pdf_exporter.create_professional_cv_pdf(
-                cv_content, contact_info, color_scheme="teal"
-            )
-            
-            # Validate PDF was created and has content
-            if not os.path.exists(pdf_path):
-                raise Exception("PDF file was not created")
-            
-            file_size = os.path.getsize(pdf_path)
-            if file_size < 1000:  # PDF should be at least 1KB
-                raise Exception(f"PDF file is too small ({file_size} bytes), likely empty")
-            
-            # Provide download
-            with open(pdf_path, "rb") as file:
-                pdf_data = file.read()
-                
-                if len(pdf_data) < 1000:
-                    raise Exception("PDF data is too small, likely corrupted or empty")
-                
-                st.download_button(
-                    label="📥 Download CV PDF",
-                    data=pdf_data,
-                    file_name=f"CV_{contact_info['name'].replace(' ', '_')}.pdf",
-                    mime="application/pdf",
-                    type="primary"
-                )
-            
-            st.success(f"✅ CV PDF generated successfully! ({file_size:,} bytes)")
-            
-            # Show PDF generation summary
-            with st.expander("📊 PDF Generation Summary", expanded=False):
-                st.write(f"**File Size:** {file_size:,} bytes")
-                st.write(f"**Content Length:** {len(cv_content):,} characters")
-                st.write(f"**Contact Fields:** {len([v for v in contact_info.values() if v])}")
-                st.write(f"**Sections Found:** {sections_check.get('sections_found', 0)}")
+            return pdf_data
             
     except Exception as e:
         logger.error(f"PDF generation error: {e}")
         st.error(f"❌ Error generating PDF: {str(e)}")
-        st.info("Using text format as fallback...")
-        
-        # Enhanced fallback with validation
-        if 'whole_cv_content' in st.session_state and st.session_state.whole_cv_content:
-            cv_content = st.session_state.whole_cv_content
-            contact_name = st.session_state.whole_cv_contact.get('name', 'CV') if 'whole_cv_contact' in st.session_state else 'CV'
-            
-            st.download_button(
-                label="📥 Download CV (Text Format)",
-                data=cv_content,
-                file_name=f"CV_{contact_name.replace(' ', '_')}.txt",
-                mime="text/plain"
-            )
-        else:
-            st.error("❌ No CV content available for text fallback either.")
+        return None
 
 def validate_cv_structure(cv_content):
     """Validate that the CV has proper structure and sections"""
@@ -1673,20 +1603,33 @@ def validate_cv_structure(cv_content):
     issues = []
     sections_found = 0
     
-    # Check for required section markers
+    # Check for required section markers (with alternatives)
     required_sections = [
-        'PROFESSIONAL SUMMARY',
-        'CORE SKILLS', 
-        'PROFESSIONAL EXPERIENCE'
+        {
+            'alternatives': ['PROFESSIONAL SUMMARY', 'EXECUTIVE SUMMARY', 'CAREER SUMMARY', 'SUMMARY'],
+            'name': 'Summary Section'
+        },
+        {
+            'alternatives': ['CORE SKILLS', 'SKILLS', 'TECHNICAL SKILLS', 'KEY SKILLS'],
+            'name': 'Skills Section'  
+        },
+        {
+            'alternatives': ['PROFESSIONAL EXPERIENCE', 'WORK EXPERIENCE', 'EXPERIENCE', 'EMPLOYMENT HISTORY'],
+            'name': 'Experience Section'
+        }
     ]
     
     content_upper = cv_content.upper()
     
-    for section in required_sections:
-        if section in content_upper:
-            sections_found += 1
-        else:
-            issues.append(f"Missing section: {section}")
+    for section_group in required_sections:
+        found = False
+        for alternative in section_group['alternatives']:
+            if alternative in content_upper:
+                sections_found += 1
+                found = True
+                break
+        if not found:
+            issues.append(f"Missing section: {section_group['name']}")
     
     # Check for contact information
     if '📧' not in cv_content and '@' not in cv_content:
