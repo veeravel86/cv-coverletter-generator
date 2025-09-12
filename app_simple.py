@@ -11,6 +11,7 @@ from services.ingest import get_pdf_ingestor
 from services.rag import create_rag_retriever, ContextBuilder
 from services.llm import get_llm_service
 from services.style_extract import get_style_extractor
+from services.skills_generator import get_skills_generator
 from exporters.pdf_export import get_pdf_exporter
 
 load_dotenv()
@@ -301,26 +302,97 @@ def handle_generation(generation_type):
 def generate_cv(llm_service, context_builder):
     with st.spinner("Generating CV..."):
         try:
+            # Get processed documents from session state
+            processed_texts = st.session_state.processed_documents["processed_texts"]
+            
+            # Generate optimized skills first
+            skills_generator = get_skills_generator()
+            
+            job_description = processed_texts.get("job_description", "")
+            experience_superset = processed_texts.get("experience_superset", "")
+            skills_superset = processed_texts.get("skills_superset", "")
+            
+            with st.spinner("🎯 Generating optimized skills..."):
+                skills_result = skills_generator.generate_top_skills(
+                    job_description, experience_superset, skills_superset
+                )
+                
+                if skills_result["valid"]:
+                    st.success(f"✅ Generated {skills_result['skill_count']} optimized skills")
+                    # Show skills in an expander
+                    with st.expander("🔍 **Generated Skills Preview**"):
+                        st.write("**Top 10 Skills (Priority Order):**")
+                        for i, skill in enumerate(skills_result["skills"], 1):
+                            st.write(f"{i}. {skill}")
+                else:
+                    st.warning(f"⚠️ Skills generation: {skills_result['validation_message']}")
+            
+            # Build context for CV generation
             context = context_builder.build_cv_generation_context()
             
-            # Simple prompt for CV generation
-            cv_prompt = """Generate a professional CV based on the job description and candidate experience provided. 
-            Include:
-            - Contact information
-            - Professional summary
-            - Work experience with achievements
-            - Skills section
-            - Education
+            # Create comprehensive CV prompt with generated skills
+            formatted_skills = skills_generator.format_skills_for_cv(skills_result["skills"], "bullet")
             
-            Make it professional and tailored to the job requirements."""
+            cv_prompt = f"""You are a professional CV writer creating an ATS-optimized resume for a senior engineering role.
+
+TASK: Create a complete, professional CV using the provided context and optimized skills.
+
+REQUIRED SECTIONS:
+1. **CONTACT INFORMATION** - Name, email, phone, location (placeholder format)
+2. **PROFESSIONAL SUMMARY** - 3-4 lines highlighting key qualifications and value proposition
+3. **CORE SKILLS** - Use EXACTLY these optimized skills:
+{formatted_skills}
+
+4. **PROFESSIONAL EXPERIENCE** - 3-4 most relevant roles with:
+   - Company, job title, dates (MM/YYYY - MM/YYYY format)
+   - 3-4 achievement-focused bullet points per role
+   - Quantified results where possible
+   - Keywords from job description
+
+5. **EDUCATION** - Degree, institution, year
+
+FORMATTING REQUIREMENTS:
+- Use ALL CAPS for section headings
+- Use • for bullet points
+- Use MM/YYYY - MM/YYYY for date formats
+- Keep professional summary under 50 words
+- Focus on achievements, not responsibilities
+- Mirror job description language
+- Ensure ATS compatibility
+
+QUALITY STANDARDS:
+- Tailor content specifically to the target role
+- Highlight relevant achievements and impact
+- Use strong action verbs
+- Include relevant keywords from job description
+- Ensure consistency in formatting and style
+
+Generate a complete, professional CV that will pass ATS scanning and impress hiring managers."""
             
-            result = llm_service.generate_cv_package(cv_prompt, context)
-            
-            st.session_state.generated_cv = result["content"]
-            st.success("✅ CV generated successfully!")
-            
-            st.subheader("📄 Generated CV")
-            st.text_area("CV Content", result["content"], height=400, key="cv_preview")
+            with st.spinner("📝 Generating complete CV..."):
+                result = llm_service.generate_cv_package(cv_prompt, context)
+                
+                st.session_state.generated_cv = result["content"]
+                st.session_state.generated_skills = skills_result  # Store for reference
+                
+                st.success("✅ CV generated successfully!")
+                
+                # Display results
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    st.subheader("📄 Generated CV")
+                    st.text_area("CV Content", result["content"], height=500, key="cv_preview")
+                
+                with col2:
+                    st.subheader("📊 Generation Stats")
+                    st.metric("Skills Generated", skills_result["skill_count"])
+                    st.metric("Word Count", len(result["content"].split()))
+                    
+                    if skills_result["valid"]:
+                        st.success("✅ Skills Optimized")
+                    else:
+                        st.warning("⚠️ Skills Partial")
             
         except Exception as e:
             st.error(f"❌ **CV Generation Failed**")
