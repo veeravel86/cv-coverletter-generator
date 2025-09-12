@@ -41,6 +41,77 @@ def initialize_session_state():
         if key not in st.session_state:
             st.session_state[key] = value
 
+def assemble_cv_from_components(skills_result, experience_result, summary_result, processed_texts):
+    """Assemble CV directly from optimized components without LLM call"""
+    
+    cv_sections = []
+    
+    # Contact Information (placeholder)
+    cv_sections.append("# JOHN DOE")
+    cv_sections.append("")
+    cv_sections.append("## CONTACT INFORMATION")
+    cv_sections.append("john.doe@email.com | +1-555-123-4567 | Location: New York, NY | LinkedIn: linkedin.com/in/johndoe")
+    cv_sections.append("")
+    
+    # Professional Summary
+    if summary_result and summary_result["summary"]:
+        cv_sections.append("## PROFESSIONAL SUMMARY")
+        cv_sections.append(summary_result["summary"])
+        cv_sections.append("")
+    
+    # Core Skills
+    if skills_result and skills_result["skills"]:
+        cv_sections.append("## CORE SKILLS")
+        for skill in skills_result["skills"]:
+            cv_sections.append(f"• {skill}")
+        cv_sections.append("")
+    
+    # Professional Experience
+    if experience_result and experience_result["bullets"]:
+        cv_sections.append("## PROFESSIONAL EXPERIENCE")
+        cv_sections.append("")
+        cv_sections.append("**Senior Engineering Manager** | TechCorp Inc. | 01/2020 - Present")
+        
+        for bullet in experience_result["bullets"]:
+            cv_sections.append(f"• {bullet.full_bullet}")
+        cv_sections.append("")
+        
+        # Add a second role if we have enough bullets (split them)
+        if len(experience_result["bullets"]) > 4:
+            mid_point = len(experience_result["bullets"]) // 2
+            cv_sections.append("**Software Engineering Lead** | InnovaTech Solutions | 03/2018 - 12/2019")
+            
+            # Use remaining bullets for previous role
+            remaining_bullets = experience_result["bullets"][mid_point:]
+            for bullet in remaining_bullets[:4]:  # Limit to 4 bullets per role
+                cv_sections.append(f"• {bullet.full_bullet}")
+            cv_sections.append("")
+    
+    # Education (extract from context if available)
+    cv_sections.append("## EDUCATION")
+    
+    # Try to extract education from processed texts
+    education_found = False
+    for doc_type, text in processed_texts.items():
+        if "bachelor" in text.lower() or "master" in text.lower() or "degree" in text.lower():
+            # Simple extraction - could be improved
+            lines = text.split('\n')
+            for line in lines:
+                if any(word in line.lower() for word in ["bachelor", "master", "degree", "university", "college"]):
+                    cv_sections.append(f"• {line.strip()}")
+                    education_found = True
+                    break
+            if education_found:
+                break
+    
+    if not education_found:
+        cv_sections.append("• Bachelor of Science in Computer Science | University Name | 2016")
+    
+    cv_sections.append("")
+    
+    # Join all sections
+    return "\n".join(cv_sections)
+
 def main():
     initialize_session_state()
     
@@ -158,120 +229,121 @@ def handle_document_upload():
                 
                 st.success(f"✅ Processed {processed_data['doc_count']} documents successfully!")
                 
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total Chunks", len(processed_data["documents"]))
-                with col2:
-                    doc_summary = ingestor.get_document_summary(processed_data["processed_texts"])
-                    total_words = sum(doc_summary.values())
-                    st.metric("Total Words", f"{total_words:,}")
-                with col3:
-                    st.metric("Vector Embeddings", len(processed_data["documents"]))
+                # Processing summary with expandable metrics
+                with st.expander("📊 **Processing Summary**", expanded=True):
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Total Chunks", len(processed_data["documents"]))
+                    with col2:
+                        doc_summary = ingestor.get_document_summary(processed_data["processed_texts"])
+                        total_words = sum(doc_summary.values())
+                        st.metric("Total Words", f"{total_words:,}")
+                    with col3:
+                        st.metric("Vector Embeddings", len(processed_data["documents"]))
+                
+                # Progressive disclosure for all processed documents
+                st.divider()
+                st.subheader("📋 Processed Documents")
                 
                 # Display cleaned job description (if uploaded)
                 if "job_description" in processed_data["processed_texts"]:
-                    st.divider()
-                    st.subheader("📄 Cleaned Job Description")
-                    
-                    # Show the LLM-cleaned version
                     cleaned_jd = processed_data["processed_texts"].get("job_description", "")
                     if cleaned_jd:
-                        st.text_area(
-                            "Job Description Content (Cleaned by AI)",
-                            cleaned_jd,
-                            height=300,
-                            help="This is the cleaned job description content extracted by AI, removing LinkedIn elements and irrelevant content"
-                        )
-                        st.info(f"📊 Cleaned Job Description: {len(cleaned_jd.split())} words, {len(cleaned_jd)} characters")
-                        
-                        # Option to view original raw text
-                        with st.expander("🔍 View Original Raw PDF Text"):
-                            raw_jd = processed_data["texts"].get("job_description", "")
+                        with st.expander(f"📄 **Job Description** ({len(cleaned_jd.split())} words)", expanded=False):
                             st.text_area(
-                                "Original Raw Text",
-                                raw_jd,
-                                height=200,
-                                help="This is the original text extracted directly from the PDF"
+                                "Cleaned Job Description (AI Processed)",
+                                cleaned_jd,
+                                height=300,
+                                help="AI-cleaned content with LinkedIn elements and irrelevant content removed",
+                                key="cleaned_jd_display"
                             )
-                            st.caption(f"Raw text: {len(raw_jd.split())} words, {len(raw_jd)} characters")
+                            
+                            # Original raw text option
+                            with st.expander("🔍 View Original Raw PDF Text"):
+                                raw_jd = processed_data["texts"].get("job_description", "")
+                                st.text_area(
+                                    "Original Raw Text",
+                                    raw_jd,
+                                    height=200,
+                                    help="Direct PDF extraction without processing",
+                                    key="raw_jd_display"
+                                )
+                                st.caption(f"Raw text: {len(raw_jd.split())} words, {len(raw_jd)} characters")
                 
                 # Display structured Sample CV content (if uploaded)
                 if "sample_cv" in processed_data["processed_texts"]:
-                    st.divider()
-                    st.subheader("📋 Structured Sample CV")
-                    
                     sample_cv_text = processed_data["processed_texts"].get("sample_cv", "")
                     if sample_cv_text:
-                        st.text_area(
-                            "Sample CV Content (Structured by AI)",
-                            sample_cv_text,
-                            height=400,
-                            help="This is the sample CV content structured by AI with proper headings and formatting"
-                        )
-                        st.info(f"📊 Structured Sample CV: {len(sample_cv_text.split())} words, {len(sample_cv_text)} characters")
-                        
-                        # Option to view original raw text
-                        with st.expander("🔍 View Original Raw Sample CV Text"):
-                            raw_sample = processed_data["texts"].get("sample_cv", "")
+                        with st.expander(f"📋 **Sample CV** ({len(sample_cv_text.split())} words)", expanded=False):
                             st.text_area(
-                                "Original Sample CV Text",
-                                raw_sample,
-                                height=200,
-                                help="This is the original text extracted directly from the sample CV PDF"
+                                "Structured Sample CV (AI Processed)",
+                                sample_cv_text,
+                                height=400,
+                                help="AI-structured content with proper headings and formatting",
+                                key="sample_cv_display"
                             )
-                            st.caption(f"Raw sample CV: {len(raw_sample.split())} words, {len(raw_sample)} characters")
+                            
+                            # Original raw text option
+                            with st.expander("🔍 View Original Raw Sample CV Text"):
+                                raw_sample = processed_data["texts"].get("sample_cv", "")
+                                st.text_area(
+                                    "Original Sample CV Text",
+                                    raw_sample,
+                                    height=200,
+                                    help="Direct PDF extraction without processing",
+                                    key="raw_sample_display"
+                                )
+                                st.caption(f"Raw sample CV: {len(raw_sample.split())} words, {len(raw_sample)} characters")
                 
                 # Display structured Skills Superset content (if uploaded)
                 if "skills_superset" in processed_data["processed_texts"]:
-                    st.divider()
-                    st.subheader("🛠️ Structured Skills Superset")
-                    
                     skills_text = processed_data["processed_texts"].get("skills_superset", "")
                     if skills_text:
-                        st.text_area(
-                            "Skills Superset Content (Structured by AI)",
-                            skills_text,
-                            height=400,
-                            help="This is the skills superset content structured by AI with proper headings and formatting"
-                        )
-                        st.info(f"📊 Structured Skills Superset: {len(skills_text.split())} words, {len(skills_text)} characters")
-                        
-                        # Option to view original raw text
-                        with st.expander("🔍 View Original Raw Skills Superset Text"):
-                            raw_skills = processed_data["texts"].get("skills_superset", "")
+                        with st.expander(f"🛠️ **Skills Superset** ({len(skills_text.split())} words)", expanded=False):
                             st.text_area(
-                                "Original Skills Superset Text",
-                                raw_skills,
-                                height=200,
-                                help="This is the original text extracted directly from the skills superset PDF"
+                                "Structured Skills Superset (AI Processed)",
+                                skills_text,
+                                height=400,
+                                help="AI-structured skills content with proper headings and formatting",
+                                key="skills_superset_display"
                             )
-                            st.caption(f"Raw skills: {len(raw_skills.split())} words, {len(raw_skills)} characters")
+                            
+                            # Original raw text option
+                            with st.expander("🔍 View Original Raw Skills Superset Text"):
+                                raw_skills = processed_data["texts"].get("skills_superset", "")
+                                st.text_area(
+                                    "Original Skills Superset Text",
+                                    raw_skills,
+                                    height=200,
+                                    help="Direct PDF extraction without processing",
+                                    key="raw_skills_display"
+                                )
+                                st.caption(f"Raw skills: {len(raw_skills.split())} words, {len(raw_skills)} characters")
                 
                 # Display structured Experience Superset content (if uploaded)
                 if "experience_superset" in processed_data["processed_texts"]:
-                    st.divider()
-                    st.subheader("💼 Structured Experience Superset")
-                    
                     experience_text = processed_data["processed_texts"].get("experience_superset", "")
                     if experience_text:
-                        st.text_area(
-                            "Experience Superset Content (Structured by AI)",
-                            experience_text,
-                            height=400,
-                            help="This is the experience superset content structured by AI with proper headings and formatting - preserves existing headings and focuses only on experience content"
-                        )
-                        st.info(f"📊 Structured Experience Superset: {len(experience_text.split())} words, {len(experience_text)} characters")
-                        
-                        # Option to view original raw text
-                        with st.expander("🔍 View Original Raw Experience Superset Text"):
-                            raw_experience = processed_data["texts"].get("experience_superset", "")
+                        with st.expander(f"💼 **Experience Superset** ({len(experience_text.split())} words)", expanded=False):
                             st.text_area(
-                                "Original Experience Superset Text",
-                                raw_experience,
-                                height=200,
-                                help="This is the original text extracted directly from the experience superset PDF"
+                                "Structured Experience Superset (AI Processed)",
+                                experience_text,
+                                height=400,
+                                help="AI-structured experience content preserving existing headings and focusing on experience content",
+                                key="experience_superset_display"
                             )
-                            st.caption(f"Raw experience: {len(raw_experience.split())} words, {len(raw_experience)} characters")
+                            
+                            # Original raw text option
+                            with st.expander("🔍 View Original Raw Experience Superset Text"):
+                                raw_experience = processed_data["texts"].get("experience_superset", "")
+                                st.text_area(
+                                    "Original Experience Superset Text",
+                                    raw_experience,
+                                    height=200,
+                                    help="Direct PDF extraction without processing",
+                                    key="raw_experience_display"
+                                )
+                                st.caption(f"Raw experience: {len(raw_experience.split())} words, {len(raw_experience)} characters")
                 
             except Exception as e:
                 st.error(f"❌ **Document Processing Failed**")
@@ -425,84 +497,38 @@ def generate_cv(llm_service, context_builder):
                     else:
                         st.info("Experience superset needed for bullet generation")
             
-            # Phase 3: Generate complete CV with optimized components
+            # Phase 4: Assemble complete CV from optimized components
             st.divider()
             
-            # Build context for CV generation
-            context = context_builder.build_cv_generation_context()
-            
-            # Create comprehensive CV prompt with generated components
-            formatted_skills = skills_generator.format_skills_for_cv(skills_result["skills"], "bullet")
-            
-            formatted_experience = ""
-            if experience_result and experience_result["bullets"]:
-                formatted_experience = experience_generator.format_bullets_for_cv(
-                    experience_result["bullets"], "standard"
+            with st.spinner("📝 Assembling complete CV from optimized components..."):
+                # Get processed texts for basic info extraction
+                processed_texts = st.session_state.processed_documents["processed_texts"]
+                
+                # Assemble CV directly from components
+                cv_content = assemble_cv_from_components(
+                    skills_result, experience_result, summary_result, processed_texts
                 )
-            
-            generated_summary = ""
-            if summary_result and summary_result["summary"]:
-                generated_summary = summary_result["summary"]
-            
-            cv_prompt = f"""You are a professional CV writer creating an ATS-optimized resume for a senior engineering role.
-
-TASK: Create a complete, professional CV using the provided context and pre-generated optimized components.
-
-REQUIRED SECTIONS:
-1. **CONTACT INFORMATION** - Name, email, phone, location (placeholder format)
-
-2. **PROFESSIONAL SUMMARY** - {"Use this exact pre-generated executive summary:" if generated_summary else "Create 2-3 lines highlighting key qualifications and value proposition"}
-{generated_summary if generated_summary else ""}
-
-3. **CORE SKILLS** - Use EXACTLY these optimized skills:
-{formatted_skills}
-
-4. **PROFESSIONAL EXPERIENCE** - {"Use these pre-generated SAR format experience bullets:" if formatted_experience else "3-4 most relevant roles with achievement-focused bullets"}
-{formatted_experience if formatted_experience else "   - Company, job title, dates (MM/YYYY - MM/YYYY format)\n   - 3-4 achievement-focused bullet points per role\n   - Quantified results where possible\n   - Keywords from job description"}
-
-5. **EDUCATION** - Degree, institution, year (extract from context)
-
-FORMATTING REQUIREMENTS:
-- Use ALL CAPS for section headings
-- Use • for bullet points
-- Use MM/YYYY - MM/YYYY for date formats
-- Keep professional summary under 50 words
-- Focus on achievements, not responsibilities
-- Mirror job description language
-- Ensure ATS compatibility
-
-QUALITY STANDARDS:
-- Tailor content specifically to the target role
-- Highlight relevant achievements and impact
-- Use strong action verbs and job description keywords
-- Ensure consistency in formatting and style
-- Create a cohesive, professional document
-
-Generate a complete, professional CV that will pass ATS scanning and impress hiring managers."""
-            
-            with st.spinner("📝 Generating complete CV..."):
-                # Debug information
-                st.write("🔍 **Debug Info:**")
-                st.write(f"- Context length: {len(context)} characters")
-                st.write(f"- Skills present: {'Yes' if formatted_skills.strip() else 'No'}")
-                st.write(f"- Experience bullets present: {'Yes' if formatted_experience else 'No'}")
-                st.write(f"- Summary present: {'Yes' if generated_summary else 'No'}")
                 
-                with st.expander("🔍 **CV Prompt Preview**"):
-                    st.text_area("Generated Prompt", cv_prompt, height=200)
+                # Debug information with progressive disclosure
+                with st.expander("🔍 **CV Assembly Debug**", expanded=False):
+                    st.write("**Component Assembly Status:**")
+                    debug_col1, debug_col2, debug_col3 = st.columns(3)
+                    
+                    with debug_col1:
+                        st.metric("Skills Added", len(skills_result["skills"]) if skills_result["skills"] else 0)
+                    with debug_col2:
+                        st.metric("Experience Bullets", len(experience_result["bullets"]) if experience_result and experience_result["bullets"] else 0)
+                    with debug_col3:
+                        st.metric("Summary Words", summary_result["word_count"] if summary_result else 0)
+                    
+                    st.write(f"**Final CV Length:** {len(cv_content):,} characters")
                 
-                result = llm_service.generate_cv_package(cv_prompt, context)
-                
-                st.write(f"📊 **API Response Debug:**")
-                st.write(f"- Response length: {len(result['content'])} characters")
-                st.write(f"- Model used: {result['model_used']}")
-                
-                if not result["content"].strip():
-                    st.error("⚠️ **Empty response from LLM - this is the issue!**")
-                    st.write("**Possible causes:**")
-                    st.write("- API rate limiting or quota issues")
-                    st.write("- Prompt too long or malformed")
-                    st.write("- Model configuration issues")
+                # Create result structure similar to LLM service
+                result = {
+                    "content": cv_content,
+                    "model_used": "Direct Assembly",
+                    "valid": True
+                }
                 
                 # Store results in session state
                 st.session_state.generated_cv = result["content"]
@@ -512,50 +538,62 @@ Generate a complete, professional CV that will pass ATS scanning and impress hir
                 if summary_result:
                     st.session_state.generated_summary = summary_result
                 
-                st.success("✅ Complete ATS-optimized CV generated successfully!")
+                st.success("✅ Complete ATS-optimized CV assembled successfully from specialized components!")
                 
-                # Display final CV
-                st.subheader("📄 Complete Generated CV")
+                # Display final CV with progressive disclosure
+                st.subheader("📄 Generated CV Output")
                 
-                # Final stats and CV display
-                final_col1, final_col2 = st.columns([3, 1])
-                
-                with final_col1:
+                # CV Content in expandable section
+                with st.expander("📋 **Complete Generated CV**", expanded=True):
                     st.text_area("CV Content", result["content"], height=600, key="cv_preview")
                 
-                with final_col2:
-                    st.subheader("📊 Generation Summary")
-                    
+                # Generation Summary in expandable section
+                with st.expander("📊 **Generation Summary & Metrics**", expanded=True):
                     # Component counts
-                    st.metric("Skills Generated", skills_result["skill_count"])
-                    if experience_result:
-                        st.metric("Experience Bullets", experience_result["bullet_count"])
-                    if summary_result:
-                        st.metric("Summary Words", f"{summary_result['word_count']}/30")
-                    st.metric("Total Word Count", len(result["content"].split()))
+                    stats_col1, stats_col2, stats_col3, stats_col4 = st.columns(4)
+                    
+                    with stats_col1:
+                        st.metric("Skills Generated", skills_result["skill_count"])
+                    with stats_col2:
+                        if experience_result:
+                            st.metric("Experience Bullets", experience_result["bullet_count"])
+                        else:
+                            st.metric("Experience Bullets", "N/A")
+                    with stats_col3:
+                        if summary_result:
+                            st.metric("Summary Words", f"{summary_result['word_count']}/30")
+                        else:
+                            st.metric("Summary Words", "N/A")
+                    with stats_col4:
+                        st.metric("Total Word Count", len(result["content"].split()))
                     
                     # Quality indicators
                     st.divider()
                     st.subheader("🎯 Quality Indicators")
                     
-                    if skills_result["valid"]:
-                        st.success("✅ Skills ATS-Optimized")
-                    else:
-                        st.warning("⚠️ Skills Partial")
-                        
-                    if experience_result and experience_result["valid"]:
-                        st.success("✅ Experience SAR Format")
-                    elif experience_result:
-                        st.warning("⚠️ Experience Partial")
-                    else:
-                        st.info("ℹ️ Basic Experience Used")
+                    quality_col1, quality_col2, quality_col3 = st.columns(3)
                     
-                    if summary_result and summary_result["valid"]:
-                        st.success("✅ Executive Summary")
-                    elif summary_result:
-                        st.warning("⚠️ Summary Needs Review")
-                    else:
-                        st.info("ℹ️ Basic Summary Used")
+                    with quality_col1:
+                        if skills_result["valid"]:
+                            st.success("✅ Skills ATS-Optimized")
+                        else:
+                            st.warning("⚠️ Skills Partial")
+                    
+                    with quality_col2:
+                        if experience_result and experience_result["valid"]:
+                            st.success("✅ Experience SAR Format")
+                        elif experience_result:
+                            st.warning("⚠️ Experience Partial")
+                        else:
+                            st.info("ℹ️ Basic Experience Used")
+                    
+                    with quality_col3:
+                        if summary_result and summary_result["valid"]:
+                            st.success("✅ Executive Summary")
+                        elif summary_result:
+                            st.warning("⚠️ Summary Needs Review")
+                        else:
+                            st.info("ℹ️ Basic Summary Used")
             
         except Exception as e:
             st.error(f"❌ **CV Generation Failed**")
@@ -581,8 +619,21 @@ def generate_cover_letter(llm_service, context_builder, company_name, role_title
             st.session_state.generated_cover_letter = result["content"]
             st.success("✅ Cover Letter generated successfully!")
             
+            # Cover Letter with progressive disclosure
             st.subheader("📝 Generated Cover Letter")
-            st.text_area("Cover Letter Content", result["content"], height=300, key="cover_letter_preview")
+            
+            with st.expander("📄 **Cover Letter Content**", expanded=True):
+                st.text_area("Cover Letter Content", result["content"], height=300, key="cover_letter_preview")
+            
+            with st.expander("📊 **Cover Letter Metrics**", expanded=False):
+                cl_col1, cl_col2, cl_col3 = st.columns(3)
+                with cl_col1:
+                    st.metric("Word Count", result.get("word_count", len(result["content"].split())))
+                with cl_col2:
+                    st.metric("Character Count", len(result["content"]))
+                with cl_col3:
+                    valid_status = "✅ Valid" if result.get("valid", True) else "⚠️ Review Needed"
+                    st.metric("Status", valid_status)
             
         except Exception as e:
             st.error(f"❌ **Cover Letter Generation Failed**")
@@ -604,6 +655,13 @@ def handle_download():
             if st.button("📄 Download CV as PDF", type="primary"):
                 with st.spinner("Generating PDF..."):
                     pdf_path = f"outputs/cv_{timestamp}.pdf"
+                    
+                    # Debug CV content for PDF export
+                    st.write("🔍 **PDF Export Debug:**")
+                    st.write(f"CV content length: {len(st.session_state.generated_cv):,} characters")
+                    
+                    with st.expander("📄 **CV Content for PDF**", expanded=False):
+                        st.text_area("CV Content Being Exported", st.session_state.generated_cv, height=200, key="pdf_debug_content")
                     
                     if st.session_state.style_profile:
                         pdf_exporter.export_to_pdf(
