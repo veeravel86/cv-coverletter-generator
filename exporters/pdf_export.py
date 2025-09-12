@@ -766,12 +766,8 @@ class PDFExporter:
                 story.append(Paragraph("<b>PROFESSIONAL EXPERIENCE</b>", prof_styles['SectionHeading']))
                 story.append(Spacer(1, 0.1*inch))
                 
-                # Add current role header
-                story.append(Paragraph("<b>Current Role</b> | Present", prof_styles['JobHeader']))
-                story.append(Spacer(1, 0.05*inch))
-                
-                # Add the 8 SAR bullets
-                self._add_sar_experience_bullets(story, individual_sections['experience_bullets'], prof_styles)
+                # Parse and add current role header from experience content
+                self._add_current_role_experience(story, individual_sections['experience_bullets'], prof_styles)
                 story.append(Spacer(1, 0.2*inch))
             
             # 5. Previous Roles - Summarized (3-4 bullets max per role)
@@ -880,58 +876,64 @@ class PDFExporter:
         return content
     
     def _add_structured_skills_boxes(self, story: List, skills_text: str, styles: Dict, colors: Dict):
-        """Add skills in individual colored boxes, multiple boxes per row"""
+        """Add skills in individual colored boxes with gaps between them"""
+        from reportlab.platypus import Table, TableStyle
+        from reportlab.lib.colors import HexColor
+        
         # Extract skills from the generated content
         skills = self._extract_skills_list(skills_text)
         
-        # Get the actual color values - colors dict contains HexColor objects
+        # Get the actual color values
         bg_color = colors.get('secondary', HexColor('#20B2AA'))
         text_color = HexColor('#FFFFFF')
         
-        # Create individual skill boxes in rows
+        # Create individual skill boxes with gaps - simpler approach
         max_skills_per_row = 4
+        box_width = 1.4 * inch
+        gap_width = 0.15 * inch  # Gap between boxes
+        
         for i in range(0, len(skills), max_skills_per_row):
             row_skills = skills[i:i+max_skills_per_row]
+            # Filter out empty skills
+            row_skills = [skill for skill in row_skills if skill.strip()]
             
-            # Create table with individual cells for each skill
-            table_data = [row_skills]
-            
-            # Calculate column widths dynamically based on number of skills in row
-            num_skills_in_row = len(row_skills)
-            total_width = 6.5 * inch  # Total available width
-            col_width = total_width / max_skills_per_row  # Fixed width for consistent alignment
-            
-            # Create columns list - empty columns for missing skills
-            col_widths = [col_width] * max_skills_per_row
-            
-            # Pad with empty strings if needed
-            while len(row_skills) < max_skills_per_row:
-                row_skills.append("")
-            
-            skill_table = Table([row_skills], colWidths=col_widths)
-            
-            # Apply styling to create individual boxes
-            table_style = []
-            for col in range(num_skills_in_row):
-                if row_skills[col]:  # Only style non-empty cells
+            if row_skills:
+                # Create row data with gaps (empty cells) between skills
+                row_data = []
+                col_widths = []
+                
+                for j, skill in enumerate(row_skills):
+                    row_data.append(skill)
+                    col_widths.append(box_width)
+                    
+                    # Add gap column except after last skill
+                    if j < len(row_skills) - 1:
+                        row_data.append("")  # Empty cell for gap
+                        col_widths.append(gap_width)
+                
+                # Create table with alternating skill and gap columns
+                skill_table = Table([row_data], colWidths=col_widths)
+                
+                # Apply styling only to skill columns (even indices)
+                table_style = []
+                for col_idx in range(0, len(row_data), 2):  # Every other column (skills only)
                     table_style.extend([
-                        ('BACKGROUND', (col, 0), (col, 0), bg_color),
-                        ('TEXTCOLOR', (col, 0), (col, 0), text_color),
-                        ('ALIGN', (col, 0), (col, 0), 'CENTER'),
-                        ('VALIGN', (col, 0), (col, 0), 'MIDDLE'),
-                        ('FONTNAME', (col, 0), (col, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (col, 0), (col, 0), 9),
-                        ('TOPPADDING', (col, 0), (col, 0), 6),
-                        ('BOTTOMPADDING', (col, 0), (col, 0), 6),
-                        ('LEFTPADDING', (col, 0), (col, 0), 8),
-                        ('RIGHTPADDING', (col, 0), (col, 0), 8),
-                        ('BOX', (col, 0), (col, 0), 1, bg_color)
+                        ('BACKGROUND', (col_idx, 0), (col_idx, 0), bg_color),
+                        ('TEXTCOLOR', (col_idx, 0), (col_idx, 0), text_color),
+                        ('ALIGN', (col_idx, 0), (col_idx, 0), 'CENTER'),
+                        ('VALIGN', (col_idx, 0), (col_idx, 0), 'MIDDLE'),
+                        ('FONTNAME', (col_idx, 0), (col_idx, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (col_idx, 0), (col_idx, 0), 9),
+                        ('TOPPADDING', (col_idx, 0), (col_idx, 0), 6),
+                        ('BOTTOMPADDING', (col_idx, 0), (col_idx, 0), 6),
+                        ('LEFTPADDING', (col_idx, 0), (col_idx, 0), 8),
+                        ('RIGHTPADDING', (col_idx, 0), (col_idx, 0), 8),
+                        ('BOX', (col_idx, 0), (col_idx, 0), 1, bg_color)
                     ])
-            
-            skill_table.setStyle(TableStyle(table_style))
-            
-            story.append(skill_table)
-            story.append(Spacer(1, 0.1*inch))
+                
+                skill_table.setStyle(TableStyle(table_style))
+                story.append(skill_table)
+                story.append(Spacer(1, 0.15*inch))
     
     def _extract_skills_list(self, skills_text: str) -> List[str]:
         """Extract individual skills from generated skills content"""
@@ -959,6 +961,38 @@ class PDFExporter:
         
         return skills[:10]  # Limit to top 10 skills
     
+    def _add_current_role_experience(self, story: List, experience_text: str, styles: Dict):
+        """Add current role with job title header and SAR bullets"""
+        if not experience_text:
+            return
+            
+        lines = [line.strip() for line in experience_text.split('\n') if line.strip()]
+        job_title_found = False
+        
+        # Look for job title line (contains |)
+        for line in lines:
+            if '|' in line and not line.startswith(('•', '-', '*', '**')):
+                # Parse job title and company
+                parts = line.split('|')
+                if len(parts) >= 2:
+                    job_title = parts[0].strip()
+                    company_info = parts[1].strip()
+                    
+                    # Add job title header with bold job title
+                    role_line = f"<b>{job_title}</b> | {company_info}"
+                    story.append(Paragraph(role_line, styles['JobHeader']))
+                    story.append(Spacer(1, 0.05*inch))
+                    job_title_found = True
+                    break
+        
+        # If no job title found, use default
+        if not job_title_found:
+            story.append(Paragraph("<b>Current Role</b> | Present", styles['JobHeader']))
+            story.append(Spacer(1, 0.05*inch))
+        
+        # Add the 8 SAR bullets
+        self._add_sar_experience_bullets(story, experience_text, styles)
+
     def _add_sar_experience_bullets(self, story: List, experience_text: str, styles: Dict):
         """Add 8 SAR bullets with bold headings for current role"""
         bullets = self._extract_sar_bullets(experience_text)
