@@ -54,39 +54,60 @@ class PDFIngestor:
         """Use LLM to extract only job description content from potentially noisy PDF text"""
         try:
             prompt = """
-You are given text extracted from a PDF that may contain a job description mixed with other content like LinkedIn page elements, navigation, ads, headers, footers, or unrelated text.
+CRITICAL TASK: You are a specialized text extraction expert. You must extract ONLY the pure job description content from a PDF that contains a LinkedIn page export with lots of noise.
 
-Please extract and return ONLY the core job description content, including:
+EXTRACT ONLY these job description elements:
 - Job title and company name
-- Job responsibilities and duties
+- Job location (city, state, remote/hybrid options)
+- Employment type (full-time, part-time, contract)
+- Job responsibilities and key duties
 - Required qualifications and skills
-- Experience requirements
+- Preferred qualifications and skills
+- Experience requirements (years, specific experience)
 - Education requirements
-- Any other job-specific requirements
-- Company description (if relevant)
+- Technical requirements and tools
+- Company description and culture information
+- Benefits and compensation (if mentioned)
+- Application instructions
 
-Remove all:
-- LinkedIn interface elements
-- Navigation menus
-- Advertisements
-- Page headers/footers
-- Unrelated content
-- Social media elements
-- User interface text
+STRICTLY REMOVE all LinkedIn page noise including:
+- LinkedIn interface elements (buttons, links, navigation)
+- "Sign in", "Join now", "Apply", "Save job" buttons
+- Social sharing buttons and links
+- LinkedIn user interface text
+- Navigation menus and breadcrumbs
+- Advertisement content
+- Page headers, footers, and metadata
+- "Show more", "See less" text
+- LinkedIn-specific formatting artifacts
+- User profile suggestions
+- Related job suggestions
+- Page loading elements
+- Cookie notices and privacy text
+- "Connect with" or networking suggestions
+- View counts, application numbers
+- LinkedIn branding text
 
-Return only clean, relevant job description text. If no job description is found, return "NO JOB DESCRIPTION FOUND".
+FORMATTING REQUIREMENTS:
+- Return clean, readable job description text
+- Use proper paragraph breaks
+- Maintain bullet points for responsibilities and requirements
+- Keep section headings (like "Requirements:", "Responsibilities:")
+- Remove excessive whitespace and formatting artifacts
 
-Raw text to process:
+If no clear job description is found, return "NO JOB DESCRIPTION FOUND".
+
+Raw LinkedIn export text to process:
 """
 
             response = self.openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "You are a text extraction specialist. Extract only job description content from noisy PDF text."},
+                    {"role": "system", "content": "You are a specialized text extraction expert. Your job is to extract ONLY pure job description content from noisy LinkedIn page exports. Be extremely thorough in removing LinkedIn interface noise while preserving all job-relevant information."},
                     {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
                 ],
-                temperature=0.1,
-                max_tokens=3000
+                temperature=0.0,  # Use 0.0 for more consistent extraction
+                max_tokens=4000  # Increased for longer job descriptions
             )
             
             extracted_content = response.choices[0].message.content.strip()
@@ -420,10 +441,14 @@ Raw skills text to process:
                     
                     # Use LLM to process and structure content based on document type
                     if doc_type == "job_description" and raw_text:
-                        with st.spinner("🤖 Extracting job description content..."):
+                        with st.spinner("🧹 Cleaning LinkedIn page noise from job description..."):
                             processed_text = self.extract_job_description_content(raw_text)
                             processed_texts[doc_type] = processed_text
-                            st.success(f"✅ {doc_type} processed and cleaned ({len(processed_text)} characters)")
+                            # Show the cleaning effectiveness
+                            original_length = len(raw_text)
+                            cleaned_length = len(processed_text)
+                            noise_removed = original_length - cleaned_length
+                            st.success(f"✅ Job description cleaned: {noise_removed} characters of LinkedIn noise removed ({cleaned_length} clean characters retained)")
                     
                     elif doc_type == "sample_cv" and raw_text:
                         with st.spinner("🤖 Structuring sample CV content..."):
