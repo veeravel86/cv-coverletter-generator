@@ -1428,6 +1428,38 @@ def format_current_experience(experience_text):
     # Add professional experience section header
     return f"**PROFESSIONAL EXPERIENCE**\n\n**Current Role** | Present\n\n{bullets_formatted}"
 
+def extract_previous_experience_from_cv(cv_content):
+    """Extract the complete Previous Roles section from the whole CV content"""
+    if not cv_content:
+        return ""
+    
+    lines = cv_content.split('\n')
+    in_previous_section = False
+    previous_content = []
+    
+    for line in lines:
+        line_upper = line.upper().strip()
+        
+        # Look for "Previous Roles" section header
+        if 'PREVIOUS ROLES' in line_upper or 'PREVIOUS EXPERIENCE' in line_upper:
+            in_previous_section = True
+            continue
+            
+        # Stop when we hit another major section
+        elif in_previous_section and any(section in line_upper for section in [
+            'ADDITIONAL INFORMATION', 'CERTIFICATIONS', 'EDUCATION', 
+            'AWARDS', 'LANGUAGES', 'REFERENCES', '---'
+        ]):
+            break
+            
+        # Collect content if we're in the previous section
+        elif in_previous_section:
+            previous_content.append(line)
+    
+    # Join and clean the content
+    result = '\n'.join(previous_content).strip()
+    return result
+
 def format_previous_experience(prev_exp_text):
     """Format previous experience section (concise, 3-4 bullets per role)"""
     if not prev_exp_text:
@@ -1628,11 +1660,14 @@ def generate_cv_pdf():
         individual_sections = {}
         
         if 'individual_generations' in st.session_state and st.session_state.individual_generations:
+            # Extract complete previous experience from whole CV content to avoid truncation
+            complete_previous_experience = extract_previous_experience_from_cv(cv_content)
+            
             individual_sections = {
                 'executive_summary': st.session_state.individual_generations.get('executive_summary', ''),
                 'top_skills': st.session_state.individual_generations.get('top_skills', ''),
                 'experience_bullets': st.session_state.individual_generations.get('experience_bullets', ''),
-                'previous_experience': st.session_state.individual_generations.get('previous_experience', '')
+                'previous_experience': complete_previous_experience
             }
         else:
             # Fallback: parse sections from whole CV content
