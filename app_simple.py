@@ -481,7 +481,28 @@ QUALITY STANDARDS:
 Generate a complete, professional CV that will pass ATS scanning and impress hiring managers."""
             
             with st.spinner("📝 Generating complete CV..."):
+                # Debug information
+                st.write("🔍 **Debug Info:**")
+                st.write(f"- Context length: {len(context)} characters")
+                st.write(f"- Skills present: {'Yes' if formatted_skills.strip() else 'No'}")
+                st.write(f"- Experience bullets present: {'Yes' if formatted_experience else 'No'}")
+                st.write(f"- Summary present: {'Yes' if generated_summary else 'No'}")
+                
+                with st.expander("🔍 **CV Prompt Preview**"):
+                    st.text_area("Generated Prompt", cv_prompt, height=200)
+                
                 result = llm_service.generate_cv_package(cv_prompt, context)
+                
+                st.write(f"📊 **API Response Debug:**")
+                st.write(f"- Response length: {len(result['content'])} characters")
+                st.write(f"- Model used: {result['model_used']}")
+                
+                if not result["content"].strip():
+                    st.error("⚠️ **Empty response from LLM - this is the issue!**")
+                    st.write("**Possible causes:**")
+                    st.write("- API rate limiting or quota issues")
+                    st.write("- Prompt too long or malformed")
+                    st.write("- Model configuration issues")
                 
                 # Store results in session state
                 st.session_state.generated_cv = result["content"]
