@@ -41,25 +41,139 @@ def initialize_session_state():
         if key not in st.session_state:
             st.session_state[key] = value
 
+def extract_contact_info_from_sample_cv(sample_cv_text):
+    """Extract contact information from sample CV"""
+    if not sample_cv_text:
+        return None, "JOHN DOE"
+    
+    lines = sample_cv_text.split('\n')
+    name = None
+    contact_info = []
+    
+    # Look for name (usually first non-empty line or after contact/header sections)
+    for i, line in enumerate(lines[:10]):  # Check first 10 lines for name
+        line = line.strip()
+        if line and not any(keyword in line.lower() for keyword in [
+            'email', 'phone', 'linkedin', 'address', 'contact', '@', '+', 'www', 'http'
+        ]):
+            # This might be the name
+            if len(line.split()) <= 4 and not line.startswith(('##', '#', '**', '•', '-')):
+                name = line.upper()  # Use uppercase for consistency
+                break
+    
+    # Extract contact information
+    for line in lines:
+        line = line.strip()
+        if any(keyword in line.lower() for keyword in [
+            'email', 'phone', 'linkedin', 'address', 'location', '@', '+1', 'tel:', 'mobile'
+        ]):
+            # Clean up the contact line
+            clean_line = line.replace('**', '').replace('*', '').strip()
+            if clean_line and not clean_line.startswith(('#', '##')):
+                contact_info.append(clean_line)
+    
+    # If we found contact info, format it
+    if contact_info:
+        # Join multiple contact lines with ' | '
+        formatted_contact = ' | '.join(contact_info[:4])  # Limit to 4 contact items
+        return formatted_contact, name or "JOHN DOE"
+    
+    return None, name or "JOHN DOE"
+
+def extract_previous_experiences_from_sample_cv(sample_cv_text):
+    """Extract previous work experiences from sample CV (excluding most recent)"""
+    if not sample_cv_text:
+        return []
+    
+    lines = sample_cv_text.split('\n')
+    experiences = []
+    current_job = None
+    current_bullets = []
+    in_experience_section = False
+    
+    for line in lines:
+        line = line.strip()
+        
+        # Detect experience section
+        if any(keyword in line.lower() for keyword in [
+            'experience', 'work experience', 'professional experience', 'employment'
+        ]) and line.startswith(('##', '#', '**')):
+            in_experience_section = True
+            continue
+        
+        # Exit experience section if we hit another section
+        if in_experience_section and line.startswith(('##', '#')) and not any(
+            keyword in line.lower() for keyword in ['experience', 'employment']
+        ):
+            # Save current job before exiting
+            if current_job and current_bullets:
+                experiences.append({
+                    'job_title': current_job,
+                    'bullets': current_bullets.copy()
+                })
+            break
+        
+        if in_experience_section and line:
+            # Check if this is a job title line (contains company, dates, title)
+            if ('|' in line and any(keyword in line.lower() for keyword in [
+                'inc', 'corp', 'company', 'ltd', 'llc', 'technologies', 'solutions', 'systems'
+            ])) or (any(char in line for char in ['2019', '2020', '2021', '2022', '2023', '2024']) and '|' in line):
+                # Save previous job if exists
+                if current_job and current_bullets:
+                    experiences.append({
+                        'job_title': current_job,
+                        'bullets': current_bullets.copy()
+                    })
+                
+                # Start new job
+                current_job = line
+                current_bullets = []
+            
+            # Check if this is a bullet point
+            elif line.startswith(('•', '-', '*', '○', '▪')) and current_job:
+                bullet_text = line[1:].strip()
+                if bullet_text:
+                    current_bullets.append(bullet_text)
+    
+    # Don't forget the last job
+    if current_job and current_bullets:
+        experiences.append({
+            'job_title': current_job,
+            'bullets': current_bullets.copy()
+        })
+    
+    # Return all but the first (most recent) experience
+    return experiences[1:] if len(experiences) > 1 else []
+
 def assemble_cv_from_components(skills_result, experience_result, summary_result, processed_texts):
-    """Assemble CV directly from optimized components without LLM call"""
+    """Assemble CV using sample CV contact info and previous experiences, with LLM current experience"""
     
     cv_sections = []
     
-    # Contact Information (placeholder)
-    cv_sections.append("# JOHN DOE")
+    # Extract sample CV information
+    sample_cv_text = processed_texts.get("sample_cv", "")
+    contact_info, name = extract_contact_info_from_sample_cv(sample_cv_text)
+    previous_experiences = extract_previous_experiences_from_sample_cv(sample_cv_text)
+    
+    # Name and Contact Information from Sample CV
+    cv_sections.append(f"# {name}")
     cv_sections.append("")
     cv_sections.append("## CONTACT INFORMATION")
-    cv_sections.append("john.doe@email.com | +1-555-123-4567 | Location: New York, NY | LinkedIn: linkedin.com/in/johndoe")
+    
+    if contact_info:
+        cv_sections.append(contact_info)
+    else:
+        # Fallback contact info
+        cv_sections.append("john.doe@email.com | +1-555-123-4567 | Location: New York, NY | LinkedIn: linkedin.com/in/johndoe")
     cv_sections.append("")
     
-    # Professional Summary
+    # Professional Summary (from LLM)
     if summary_result and summary_result["summary"]:
         cv_sections.append("## PROFESSIONAL SUMMARY")
         cv_sections.append(summary_result["summary"])
         cv_sections.append("")
     
-    # Core Skills
+    # Core Skills (from LLM)
     if skills_result and skills_result["skills"]:
         cv_sections.append("## CORE SKILLS")
         for skill in skills_result["skills"]:
@@ -67,42 +181,53 @@ def assemble_cv_from_components(skills_result, experience_result, summary_result
         cv_sections.append("")
     
     # Professional Experience
+    cv_sections.append("## PROFESSIONAL EXPERIENCE")
+    cv_sections.append("")
+    
+    # Current Experience (from LLM - use generated bullets)
     if experience_result and experience_result["bullets"]:
-        cv_sections.append("## PROFESSIONAL EXPERIENCE")
-        cv_sections.append("")
-        cv_sections.append("**Senior Engineering Manager** | TechCorp Inc. | 01/2020 - Present")
+        # Use first few bullets for current role
+        current_role_bullets = experience_result["bullets"][:4] if len(experience_result["bullets"]) > 4 else experience_result["bullets"]
         
-        for bullet in experience_result["bullets"]:
+        cv_sections.append("**Senior Engineering Manager** | TechCorp Inc. | 01/2020 - Present")
+        for bullet in current_role_bullets:
             cv_sections.append(f"• {bullet.full_bullet}")
         cv_sections.append("")
-        
-        # Add a second role if we have enough bullets (split them)
-        if len(experience_result["bullets"]) > 4:
-            mid_point = len(experience_result["bullets"]) // 2
-            cv_sections.append("**Software Engineering Lead** | InnovaTech Solutions | 03/2018 - 12/2019")
-            
-            # Use remaining bullets for previous role
-            remaining_bullets = experience_result["bullets"][mid_point:]
-            for bullet in remaining_bullets[:4]:  # Limit to 4 bullets per role
-                cv_sections.append(f"• {bullet.full_bullet}")
-            cv_sections.append("")
     
-    # Education (extract from context if available)
+    # Previous Experiences (from Sample CV)
+    for exp in previous_experiences:
+        cv_sections.append(exp['job_title'])
+        for bullet in exp['bullets'][:4]:  # Limit to 4 bullets per role
+            cv_sections.append(f"• {bullet}")
+        cv_sections.append("")
+    
+    # Education (extract from sample CV or other processed texts)
     cv_sections.append("## EDUCATION")
     
-    # Try to extract education from processed texts
     education_found = False
-    for doc_type, text in processed_texts.items():
-        if "bachelor" in text.lower() or "master" in text.lower() or "degree" in text.lower():
-            # Simple extraction - could be improved
-            lines = text.split('\n')
-            for line in lines:
-                if any(word in line.lower() for word in ["bachelor", "master", "degree", "university", "college"]):
-                    cv_sections.append(f"• {line.strip()}")
+    # First try sample CV
+    if sample_cv_text:
+        lines = sample_cv_text.split('\n')
+        for line in lines:
+            if any(word in line.lower() for word in ["bachelor", "master", "degree", "university", "college", "phd", "doctorate"]):
+                clean_line = line.replace('**', '').replace('*', '').strip()
+                if clean_line and not clean_line.startswith(('#', '##')):
+                    cv_sections.append(f"• {clean_line}")
                     education_found = True
                     break
-            if education_found:
-                break
+    
+    # Try other processed texts if not found in sample CV
+    if not education_found:
+        for doc_type, text in processed_texts.items():
+            if doc_type != "sample_cv" and any(word in text.lower() for word in ["bachelor", "master", "degree", "university", "college"]):
+                lines = text.split('\n')
+                for line in lines:
+                    if any(word in line.lower() for word in ["bachelor", "master", "degree", "university", "college"]):
+                        cv_sections.append(f"• {line.strip()}")
+                        education_found = True
+                        break
+                if education_found:
+                    break
     
     if not education_found:
         cv_sections.append("• Bachelor of Science in Computer Science | University Name | 2016")
@@ -520,6 +645,28 @@ def generate_cv(llm_service, context_builder):
                         st.metric("Experience Bullets", len(experience_result["bullets"]) if experience_result and experience_result["bullets"] else 0)
                     with debug_col3:
                         st.metric("Summary Words", summary_result["word_count"] if summary_result else 0)
+                    
+                    # Show sample CV extraction info
+                    st.divider()
+                    st.write("**Sample CV Extraction:**")
+                    sample_cv_text = processed_texts.get("sample_cv", "")
+                    
+                    if sample_cv_text:
+                        # Extract info for debugging
+                        contact_info, name = extract_contact_info_from_sample_cv(sample_cv_text)
+                        previous_experiences = extract_previous_experiences_from_sample_cv(sample_cv_text)
+                        
+                        extract_col1, extract_col2 = st.columns(2)
+                        with extract_col1:
+                            st.write(f"**Name Extracted:** {name}")
+                            st.write(f"**Contact Info:** {'✅ Found' if contact_info else '❌ Not found'}")
+                        with extract_col2:
+                            st.write(f"**Previous Experiences:** {len(previous_experiences)} found")
+                            if previous_experiences:
+                                for i, exp in enumerate(previous_experiences[:2], 1):
+                                    st.write(f"  {i}. {exp['job_title'][:50]}...")
+                    else:
+                        st.warning("No sample CV provided - using placeholder data")
                     
                     st.write(f"**Final CV Length:** {len(cv_content):,} characters")
                 
