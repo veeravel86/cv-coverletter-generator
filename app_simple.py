@@ -175,36 +175,57 @@ def handle_document_upload():
                 else:
                     st.warning("No job description text was extracted")
                 
-                # Display extracted Sample CV content
+                # Display structured Sample CV content
                 st.divider()
-                st.subheader("📋 Extracted Sample CV")
+                st.subheader("📋 Structured Sample CV")
                 
                 sample_cv_text = processed_data["processed_texts"].get("sample_cv", "")
                 if sample_cv_text:
-                    with st.expander("🔍 View Sample CV Content", expanded=False):
+                    st.text_area(
+                        "Sample CV Content (Structured by AI)",
+                        sample_cv_text,
+                        height=400,
+                        help="This is the sample CV content structured by AI with proper headings and formatting"
+                    )
+                    st.info(f"📊 Structured Sample CV: {len(sample_cv_text.split())} words, {len(sample_cv_text)} characters")
+                    
+                    # Option to view original raw text
+                    with st.expander("🔍 View Original Raw Sample CV Text"):
+                        raw_sample = processed_data["texts"].get("sample_cv", "")
                         st.text_area(
-                            "Sample CV Text",
-                            sample_cv_text,
-                            height=400,
-                            help="This is the text extracted from your sample CV PDF - used for style matching"
+                            "Original Sample CV Text",
+                            raw_sample,
+                            height=200,
+                            help="This is the original text extracted directly from the sample CV PDF"
                         )
-                        st.caption(f"Sample CV: {len(sample_cv_text.split())} words, {len(sample_cv_text)} characters")
+                        st.caption(f"Raw sample CV: {len(raw_sample.split())} words, {len(raw_sample)} characters")
                 else:
                     st.warning("No sample CV text was extracted")
                 
-                # Display extracted Experience Superset content
-                st.subheader("📚 Extracted Experience Superset")
+                # Display structured Experience Superset content
+                st.divider()
+                st.subheader("📚 Structured Experience Superset")
                 
                 superset_text = processed_data["processed_texts"].get("superset", "")
                 if superset_text:
-                    with st.expander("🔍 View Experience Superset Content", expanded=False):
+                    st.text_area(
+                        "Experience Superset Content (Structured by AI)",
+                        superset_text,
+                        height=400,
+                        help="This is the experience superset content structured by AI with proper headings and formatting"
+                    )
+                    st.info(f"📊 Structured Experience Superset: {len(superset_text.split())} words, {len(superset_text)} characters")
+                    
+                    # Option to view original raw text
+                    with st.expander("🔍 View Original Raw Experience Superset Text"):
+                        raw_superset = processed_data["texts"].get("superset", "")
                         st.text_area(
-                            "Experience Superset Text",
-                            superset_text,
-                            height=400,
-                            help="This is the text extracted from your experience superset PDF - contains your full background"
+                            "Original Experience Superset Text",
+                            raw_superset,
+                            height=200,
+                            help="This is the original text extracted directly from the experience superset PDF"
                         )
-                        st.caption(f"Experience Superset: {len(superset_text.split())} words, {len(superset_text)} characters")
+                        st.caption(f"Raw superset: {len(raw_superset.split())} words, {len(raw_superset)} characters")
                 else:
                     st.warning("No experience superset text was extracted")
                 

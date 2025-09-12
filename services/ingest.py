@@ -101,6 +101,108 @@ Raw text to process:
             logger.error(f"Error extracting job description content with LLM: {e}")
             return raw_text  # Fallback to original text
     
+    def structure_sample_cv_content(self, raw_text: str) -> str:
+        """Use LLM to structure sample CV content with proper headings"""
+        try:
+            prompt = """
+You are given text extracted from a sample CV PDF. Please restructure this content with proper headings and clean formatting.
+
+Create clear section headings such as:
+- CONTACT INFORMATION (name, email, phone, location, LinkedIn)
+- PROFESSIONAL SUMMARY or CAREER SUMMARY
+- SKILLS or TECHNICAL SKILLS 
+- WORK EXPERIENCE or PROFESSIONAL EXPERIENCE
+- EDUCATION
+- CERTIFICATIONS (if present)
+- PROJECTS (if present)
+- ACHIEVEMENTS or AWARDS (if present)
+
+Format the content with:
+- Clear section headings in ALL CAPS
+- Consistent bullet points using •
+- Clean date formats
+- Proper spacing between sections
+- Remove any PDF artifacts or formatting issues
+
+Return well-structured CV content. If the content doesn't appear to be a CV, return "NO CV CONTENT FOUND".
+
+Raw CV text to process:
+"""
+
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a CV formatting specialist. Structure CV content with proper headings and formatting."},
+                    {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
+                ],
+                temperature=0.1,
+                max_tokens=4000
+            )
+            
+            structured_content = response.choices[0].message.content.strip()
+            
+            if "NO CV CONTENT FOUND" in structured_content:
+                logger.warning("LLM could not structure CV content")
+                return raw_text  # Fallback to original text
+            
+            return structured_content
+            
+        except Exception as e:
+            logger.error(f"Error structuring CV content with LLM: {e}")
+            return raw_text  # Fallback to original text
+    
+    def structure_experience_superset_content(self, raw_text: str) -> str:
+        """Use LLM to structure experience superset content with proper headings"""
+        try:
+            prompt = """
+You are given text extracted from an experience superset PDF containing comprehensive career background. Please restructure this content with proper headings and clean formatting.
+
+Create clear section headings such as:
+- TECHNICAL SKILLS
+- WORK EXPERIENCE
+- KEY PROJECTS
+- ACHIEVEMENTS
+- CERTIFICATIONS
+- EDUCATION
+- LEADERSHIP EXPERIENCE
+- AWARDS AND RECOGNITION
+
+Format the content with:
+- Clear section headings in ALL CAPS
+- Consistent bullet points using •
+- Clean date formats (MM/YYYY format)
+- Quantified achievements where possible
+- Proper spacing between sections
+- Group similar experiences together
+- Remove any PDF artifacts or formatting issues
+
+Focus on creating a comprehensive, well-organized professional profile. If the content doesn't appear to be career-related, return "NO EXPERIENCE CONTENT FOUND".
+
+Raw experience text to process:
+"""
+
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a professional experience formatting specialist. Structure career content with proper headings and formatting."},
+                    {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
+                ],
+                temperature=0.1,
+                max_tokens=4000
+            )
+            
+            structured_content = response.choices[0].message.content.strip()
+            
+            if "NO EXPERIENCE CONTENT FOUND" in structured_content:
+                logger.warning("LLM could not structure experience content")
+                return raw_text  # Fallback to original text
+            
+            return structured_content
+            
+        except Exception as e:
+            logger.error(f"Error structuring experience content with LLM: {e}")
+            return raw_text  # Fallback to original text
+    
     def create_documents(self, texts: Dict[str, str]) -> List[Document]:
         documents = []
         for doc_type, text in texts.items():
@@ -135,12 +237,25 @@ Raw text to process:
                 with st.spinner(f"Processing {doc_type}..."):
                     raw_text = self.extract_text_from_pdf(file)
                     
-                    # For job description, use LLM to extract clean content
+                    # Use LLM to process and structure content based on document type
                     if doc_type == "job_description" and raw_text:
                         with st.spinner("🤖 Extracting job description content..."):
                             processed_text = self.extract_job_description_content(raw_text)
                             processed_texts[doc_type] = processed_text
                             st.success(f"✅ {doc_type} processed and cleaned ({len(processed_text)} characters)")
+                    
+                    elif doc_type == "sample_cv" and raw_text:
+                        with st.spinner("🤖 Structuring sample CV content..."):
+                            processed_text = self.structure_sample_cv_content(raw_text)
+                            processed_texts[doc_type] = processed_text
+                            st.success(f"✅ {doc_type} structured with proper headings ({len(processed_text)} characters)")
+                    
+                    elif doc_type == "superset" and raw_text:
+                        with st.spinner("🤖 Structuring experience superset content..."):
+                            processed_text = self.structure_experience_superset_content(raw_text)
+                            processed_texts[doc_type] = processed_text
+                            st.success(f"✅ {doc_type} structured with proper headings ({len(processed_text)} characters)")
+                    
                     else:
                         processed_texts[doc_type] = raw_text
                         st.success(f"✅ {doc_type} processed ({len(raw_text)} characters)")
@@ -157,7 +272,7 @@ Raw text to process:
         
         return {
             "texts": texts,  # Original extracted text
-            "processed_texts": processed_texts,  # LLM-cleaned text  
+            "processed_texts": processed_texts,  # LLM-structured text  
             "documents": documents,
             "vector_store": vector_store,
             "doc_count": len([t for t in processed_texts.values() if t])
