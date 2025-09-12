@@ -751,33 +751,67 @@ def format_content_with_structure(content: str, doc_type: str) -> str:
     return '\n'.join(formatted_lines)
 
 def generate_top_skills(llm_service, context_builder):
-    """Generate top 10 skills with expandable display"""
+    """Generate top 10 skills with expandable display using professional ATS-optimized prompt"""
     
     with st.spinner("🛠️ Generating top 10 skills..."):
         try:
-            # Get relevant context from vector store
-            context = context_builder.build_context("skills technical competencies expertise")
+            # Get job description context
+            job_context = context_builder.build_context("job description requirements responsibilities qualifications skills")
             
-            prompt = f"""
-Based on the following context, extract and rank the top 10 most relevant and marketable skills.
+            # Get experience superset context
+            experience_context = context_builder.build_context("skills technical competencies expertise experience achievements")
+            
+            prompt = f"""You are an expert CV writer and ATS optimizer for senior engineering leadership roles.
+Read two attached input files (PDFs):
+- FILE 1: Job_Description.pdf → complete job description
+- FILE 2: CV_ExperienceSummary_Skills_Superset - Google Docs.pdf → my full "experience superset"
 
-Context:
-{context}
+JOB DESCRIPTION CONTEXT:
+{job_context}
 
-Requirements:
-- Extract exactly 10 skills
-- Each skill should be 1-3 words maximum
-- Prioritize technical skills and in-demand competencies
-- Include both hard and soft skills where relevant
-- Format as a numbered list
-- Consider current market demand and relevance
+EXPERIENCE SUPERSET CONTEXT:
+{experience_context}
 
-Return format:
-1. Skill Name
-2. Skill Name
-...
-10. Skill Name
-"""
+GOAL
+Produce EXACTLY 10 skills (max two words each) that:
+- Are directly derived from the JD's language.
+- Are ordered by PRIORITY based on the JD's stated and implied requirements.
+- Are present in (or credibly supported by) my Experience Superset to avoid listing skills I don't have.
+
+SKILL RULES
+- Each skill must be ≤ 2 words, Title Case, and ideally reuse JD keywords verbatim.
+- Prefer JD phrasing over synonyms; only use a close synonym if the exact JD term cannot fit in ≤ 2 words.
+- No duplication or near-duplicates (e.g., "Platform Engineering" vs "Platform Ops"—pick one).
+- Use international English unless the JD clearly uses US spelling.
+- Do NOT add commentary, definitions, or examples.
+
+PRIORITY RULES (ORDER HIGHEST → LOWEST)
+1) Mission-critical competencies and leadership scope explicitly required by the JD.
+2) Skills/terms repeated or emphasised in the JD (high keyword frequency or prominence).
+3) Strategic differentiators likely valued for this role (use your industry knowledge), when also supported by my Superset.
+
+PROCESS (AI internal reasoning; do NOT include in output)
+1) Parse Job_Description.pdf → extract competencies, requirements, repeated keywords, leadership scope, domain/tech stack.
+2) Parse the Superset PDF → identify which JD skills I can credibly claim.
+3) Build a candidate skill list from JD terms (≤ 2 words), mapped to my Superset.
+4) Rank candidates using the priority rules; remove overlaps and near-duplicates.
+5) Final check for clarity, JD wording fidelity, and ATS friendliness.
+
+OUTPUT FORMAT (strict)
+- Output ONLY the 10 skills, one per line, highest priority first.
+- No numbering, no bullets, no extra text.
+- Each line must be exactly a ≤ 2-word skill in Title Case.
+
+CONSTRAINTS
+- Use ONLY skills supported by my Superset (no fabrication).
+- Keep every skill ≤ 2 words; compress longer JD phrases while preserving meaning (e.g., "Incident Management," "Vendor Strategy").
+- Avoid buzzword noise; each skill must map to a concrete competency in the JD.
+
+QUALITY BAR
+- Challenge your first pass: does each skill mirror JD language, reflect priority, and align with my Superset?
+- Assume review by both ATS and a CTO—optimise for accuracy, clarity, and relevance.
+
+BEGIN."""
             
             response = llm_service.generate_content(prompt, max_tokens=500)
             
@@ -789,8 +823,10 @@ Return format:
             # Display with expander
             with st.expander("🛠️ Top 10 Skills - Click to expand", expanded=True):
                 st.markdown("### Generated Skills")
-                st.write(response)
-                st.caption("💡 These skills were extracted from your documents and ranked by relevance")
+                st.markdown("*JD-aligned skills prioritized by relevance and supported by experience superset*")
+                st.markdown("---")
+                st.code(response, language=None)  # Display as plain text for clean skill list
+                st.caption("🎯 Skills derived from JD language and ranked by priority (≤2 words each)")
             
         except Exception as e:
             st.error(f"❌ Error generating skills: {str(e)}")
