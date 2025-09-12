@@ -163,37 +163,44 @@ Raw CV text to process:
         """Use LLM to structure experience superset content with proper headings"""
         try:
             prompt = """
-CRITICAL INSTRUCTIONS: You are a formatting assistant. Your ONLY job is to organize existing content under proper headings.
+CRITICAL INSTRUCTIONS: You are a formatting assistant. Your ONLY job is to organize existing content under proper headings while PRESERVING ALL existing headings and content EXACTLY as written.
 
-STRICT RULES - ABSOLUTE REQUIREMENTS:
+ABSOLUTE REQUIREMENTS - NO EXCEPTIONS:
 - DO NOT remove, delete, or omit ANY information from the original text
-- DO NOT change the meaning or content of any sentences
+- DO NOT change the meaning or content of any sentences  
 - DO NOT summarize, paraphrase, or rewrite any content
 - DO NOT add new information that wasn't in the original
+- PRESERVE ALL existing headings exactly as they appear in the original
 - PRESERVE all dates, numbers, company names, project names, achievements, and details EXACTLY as written
 - PRESERVE all quantified achievements (percentages, numbers, metrics) exactly as stated
+- If there are existing headings in the document, KEEP them exactly as they are
 - Your job is ONLY to organize and format, not to edit or improve content
 - If there are multiple similar entries, keep ALL of them - do not consolidate or merge
 
-TASK: Take ALL the text provided and organize it under appropriate headings:
-- WORK EXPERIENCE  
-- KEY PROJECTS
-- ACHIEVEMENTS
-- CERTIFICATIONS
-- EDUCATION
-- LEADERSHIP EXPERIENCE
-- AWARDS AND RECOGNITION
-- ADDITIONAL INFORMATION (for content that doesn't fit other categories)
+TASK: Take ALL the text provided and organize it. Focus ONLY on experience-related content:
+- If the document already has headings, preserve them exactly
+- If content needs organization, use these headings ONLY if no existing headings are present:
+  - WORK EXPERIENCE  
+  - PROFESSIONAL EXPERIENCE
+  - KEY PROJECTS
+  - PROJECT EXPERIENCE
+
+DO NOT CREATE sections for:
+- Awards, recognition, achievements (unless specifically about work experience)
+- Education or certifications 
+- Skills or technical competencies
+- Personal information
 
 FORMATTING GUIDELINES:
-- Use ALL CAPS for section headings
-- Use • for bullet points
+- Keep ALL original headings exactly as they appear
+- Use ALL CAPS only if original headings were in ALL CAPS
+- Use • for bullet points only if not already formatted
 - Keep all original content exactly as provided
 - Only remove obvious PDF artifacts (repeated characters, page numbers, footers)
-- If you're unsure where something belongs, put it in "ADDITIONAL INFORMATION"
-- Maintain original date formats unless they are clearly corrupted
+- Maintain original date formats exactly as written
+- Preserve original formatting structure as much as possible
 
-MANDATORY VERIFICATION: After formatting, verify that EVERY single piece of information, project, achievement, date, and detail from the original text appears somewhere in your organized output. Nothing should be missing.
+MANDATORY VERIFICATION: After formatting, verify that EVERY single piece of experience information, project detail, achievement, date, and detail from the original text appears exactly as it was written. Nothing should be missing or changed.
 
 Raw experience text to process:
 """
@@ -201,7 +208,7 @@ Raw experience text to process:
             response = self.openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "You are a formatting assistant. Your ONLY job is to organize content under headings. You must preserve ALL information exactly as provided. Do not change, remove, or modify any content - only organize it under appropriate headings."},
+                    {"role": "system", "content": "You are a formatting assistant. Your ONLY job is to organize content while preserving ALL existing headings and content EXACTLY as written. Do not change, remove, or modify any content - only organize it while maintaining original structure and headings."},
                     {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
                 ],
                 temperature=0.0,  # Set to 0 for maximum consistency

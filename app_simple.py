@@ -119,20 +119,26 @@ def handle_document_upload():
         )
     
     if st.button("🔄 Process Documents", type="primary"):
-        if not all([job_description, skills_superset, experience_superset, sample_cv]):
-            st.error("❌ Please upload all four PDF files")
+        # Check if at least one document is uploaded
+        uploaded_docs = [job_description, skills_superset, experience_superset, sample_cv]
+        if not any(uploaded_docs):
+            st.error("❌ Please upload at least one PDF file")
             return
         
         with st.spinner("Processing documents..."):
             try:
                 ingestor = get_pdf_ingestor()
                 
-                uploaded_files = {
-                    "job_description": job_description,
-                    "skills_superset": skills_superset,
-                    "experience_superset": experience_superset,
-                    "sample_cv": sample_cv
-                }
+                # Only include uploaded files
+                uploaded_files = {}
+                if job_description:
+                    uploaded_files["job_description"] = job_description
+                if skills_superset:
+                    uploaded_files["skills_superset"] = skills_superset
+                if experience_superset:
+                    uploaded_files["experience_superset"] = experience_superset
+                if sample_cv:
+                    uploaded_files["sample_cv"] = sample_cv
                 
                 processed_data = ingestor.ingest_pdfs(uploaded_files)
                 st.session_state.processed_documents = processed_data
@@ -155,114 +161,110 @@ def handle_document_upload():
                 with col3:
                     st.metric("Vector Embeddings", len(processed_data["documents"]))
                 
-                # Display cleaned job description
-                st.divider()
-                st.subheader("📄 Cleaned Job Description")
-                
-                # Show the LLM-cleaned version
-                cleaned_jd = processed_data["processed_texts"].get("job_description", "")
-                if cleaned_jd:
-                    st.text_area(
-                        "Job Description Content (Cleaned by AI)",
-                        cleaned_jd,
-                        height=300,
-                        help="This is the cleaned job description content extracted by AI, removing LinkedIn elements and irrelevant content"
-                    )
-                    st.info(f"📊 Cleaned Job Description: {len(cleaned_jd.split())} words, {len(cleaned_jd)} characters")
+                # Display cleaned job description (if uploaded)
+                if "job_description" in processed_data["processed_texts"]:
+                    st.divider()
+                    st.subheader("📄 Cleaned Job Description")
                     
-                    # Option to view original raw text
-                    with st.expander("🔍 View Original Raw PDF Text"):
-                        raw_jd = processed_data["texts"].get("job_description", "")
+                    # Show the LLM-cleaned version
+                    cleaned_jd = processed_data["processed_texts"].get("job_description", "")
+                    if cleaned_jd:
                         st.text_area(
-                            "Original Raw Text",
-                            raw_jd,
-                            height=200,
-                            help="This is the original text extracted directly from the PDF"
+                            "Job Description Content (Cleaned by AI)",
+                            cleaned_jd,
+                            height=300,
+                            help="This is the cleaned job description content extracted by AI, removing LinkedIn elements and irrelevant content"
                         )
-                        st.caption(f"Raw text: {len(raw_jd.split())} words, {len(raw_jd)} characters")
-                else:
-                    st.warning("No job description text was extracted")
+                        st.info(f"📊 Cleaned Job Description: {len(cleaned_jd.split())} words, {len(cleaned_jd)} characters")
+                        
+                        # Option to view original raw text
+                        with st.expander("🔍 View Original Raw PDF Text"):
+                            raw_jd = processed_data["texts"].get("job_description", "")
+                            st.text_area(
+                                "Original Raw Text",
+                                raw_jd,
+                                height=200,
+                                help="This is the original text extracted directly from the PDF"
+                            )
+                            st.caption(f"Raw text: {len(raw_jd.split())} words, {len(raw_jd)} characters")
                 
-                # Display structured Sample CV content
-                st.divider()
-                st.subheader("📋 Structured Sample CV")
-                
-                sample_cv_text = processed_data["processed_texts"].get("sample_cv", "")
-                if sample_cv_text:
-                    st.text_area(
-                        "Sample CV Content (Structured by AI)",
-                        sample_cv_text,
-                        height=400,
-                        help="This is the sample CV content structured by AI with proper headings and formatting"
-                    )
-                    st.info(f"📊 Structured Sample CV: {len(sample_cv_text.split())} words, {len(sample_cv_text)} characters")
+                # Display structured Sample CV content (if uploaded)
+                if "sample_cv" in processed_data["processed_texts"]:
+                    st.divider()
+                    st.subheader("📋 Structured Sample CV")
                     
-                    # Option to view original raw text
-                    with st.expander("🔍 View Original Raw Sample CV Text"):
-                        raw_sample = processed_data["texts"].get("sample_cv", "")
+                    sample_cv_text = processed_data["processed_texts"].get("sample_cv", "")
+                    if sample_cv_text:
                         st.text_area(
-                            "Original Sample CV Text",
-                            raw_sample,
-                            height=200,
-                            help="This is the original text extracted directly from the sample CV PDF"
+                            "Sample CV Content (Structured by AI)",
+                            sample_cv_text,
+                            height=400,
+                            help="This is the sample CV content structured by AI with proper headings and formatting"
                         )
-                        st.caption(f"Raw sample CV: {len(raw_sample.split())} words, {len(raw_sample)} characters")
-                else:
-                    st.warning("No sample CV text was extracted")
+                        st.info(f"📊 Structured Sample CV: {len(sample_cv_text.split())} words, {len(sample_cv_text)} characters")
+                        
+                        # Option to view original raw text
+                        with st.expander("🔍 View Original Raw Sample CV Text"):
+                            raw_sample = processed_data["texts"].get("sample_cv", "")
+                            st.text_area(
+                                "Original Sample CV Text",
+                                raw_sample,
+                                height=200,
+                                help="This is the original text extracted directly from the sample CV PDF"
+                            )
+                            st.caption(f"Raw sample CV: {len(raw_sample.split())} words, {len(raw_sample)} characters")
                 
-                # Display structured Skills Superset content
-                st.divider()
-                st.subheader("🛠️ Structured Skills Superset")
-                
-                skills_text = processed_data["processed_texts"].get("skills_superset", "")
-                if skills_text:
-                    st.text_area(
-                        "Skills Superset Content (Structured by AI)",
-                        skills_text,
-                        height=400,
-                        help="This is the skills superset content structured by AI with proper headings and formatting"
-                    )
-                    st.info(f"📊 Structured Skills Superset: {len(skills_text.split())} words, {len(skills_text)} characters")
+                # Display structured Skills Superset content (if uploaded)
+                if "skills_superset" in processed_data["processed_texts"]:
+                    st.divider()
+                    st.subheader("🛠️ Structured Skills Superset")
                     
-                    # Option to view original raw text
-                    with st.expander("🔍 View Original Raw Skills Superset Text"):
-                        raw_skills = processed_data["texts"].get("skills_superset", "")
+                    skills_text = processed_data["processed_texts"].get("skills_superset", "")
+                    if skills_text:
                         st.text_area(
-                            "Original Skills Superset Text",
-                            raw_skills,
-                            height=200,
-                            help="This is the original text extracted directly from the skills superset PDF"
+                            "Skills Superset Content (Structured by AI)",
+                            skills_text,
+                            height=400,
+                            help="This is the skills superset content structured by AI with proper headings and formatting"
                         )
-                        st.caption(f"Raw skills: {len(raw_skills.split())} words, {len(raw_skills)} characters")
-                else:
-                    st.warning("No skills superset text was extracted")
+                        st.info(f"📊 Structured Skills Superset: {len(skills_text.split())} words, {len(skills_text)} characters")
+                        
+                        # Option to view original raw text
+                        with st.expander("🔍 View Original Raw Skills Superset Text"):
+                            raw_skills = processed_data["texts"].get("skills_superset", "")
+                            st.text_area(
+                                "Original Skills Superset Text",
+                                raw_skills,
+                                height=200,
+                                help="This is the original text extracted directly from the skills superset PDF"
+                            )
+                            st.caption(f"Raw skills: {len(raw_skills.split())} words, {len(raw_skills)} characters")
                 
-                # Display structured Experience Superset content
-                st.divider()
-                st.subheader("💼 Structured Experience Superset")
-                
-                experience_text = processed_data["processed_texts"].get("experience_superset", "")
-                if experience_text:
-                    st.text_area(
-                        "Experience Superset Content (Structured by AI)",
-                        experience_text,
-                        height=400,
-                        help="This is the experience superset content structured by AI with proper headings and formatting"
-                    )
-                    st.info(f"📊 Structured Experience Superset: {len(experience_text.split())} words, {len(experience_text)} characters")
+                # Display structured Experience Superset content (if uploaded)
+                if "experience_superset" in processed_data["processed_texts"]:
+                    st.divider()
+                    st.subheader("💼 Structured Experience Superset")
                     
-                    # Option to view original raw text
-                    with st.expander("🔍 View Original Raw Experience Superset Text"):
-                        raw_experience = processed_data["texts"].get("experience_superset", "")
+                    experience_text = processed_data["processed_texts"].get("experience_superset", "")
+                    if experience_text:
                         st.text_area(
-                            "Original Experience Superset Text",
-                            raw_experience,
-                            height=200,
-                            help="This is the original text extracted directly from the experience superset PDF"
+                            "Experience Superset Content (Structured by AI)",
+                            experience_text,
+                            height=400,
+                            help="This is the experience superset content structured by AI with proper headings and formatting - preserves existing headings and focuses only on experience content"
                         )
-                        st.caption(f"Raw experience: {len(raw_experience.split())} words, {len(raw_experience)} characters")
-                else:
-                    st.warning("No experience superset text was extracted")
+                        st.info(f"📊 Structured Experience Superset: {len(experience_text.split())} words, {len(experience_text)} characters")
+                        
+                        # Option to view original raw text
+                        with st.expander("🔍 View Original Raw Experience Superset Text"):
+                            raw_experience = processed_data["texts"].get("experience_superset", "")
+                            st.text_area(
+                                "Original Experience Superset Text",
+                                raw_experience,
+                                height=200,
+                                help="This is the original text extracted directly from the experience superset PDF"
+                            )
+                            st.caption(f"Raw experience: {len(raw_experience.split())} words, {len(raw_experience)} characters")
                 
             except Exception as e:
                 st.error(f"❌ **Document Processing Failed**")
