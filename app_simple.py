@@ -175,6 +175,39 @@ def handle_document_upload():
                 else:
                     st.warning("No job description text was extracted")
                 
+                # Display extracted Sample CV content
+                st.divider()
+                st.subheader("📋 Extracted Sample CV")
+                
+                sample_cv_text = processed_data["processed_texts"].get("sample_cv", "")
+                if sample_cv_text:
+                    with st.expander("🔍 View Sample CV Content", expanded=False):
+                        st.text_area(
+                            "Sample CV Text",
+                            sample_cv_text,
+                            height=400,
+                            help="This is the text extracted from your sample CV PDF - used for style matching"
+                        )
+                        st.caption(f"Sample CV: {len(sample_cv_text.split())} words, {len(sample_cv_text)} characters")
+                else:
+                    st.warning("No sample CV text was extracted")
+                
+                # Display extracted Experience Superset content
+                st.subheader("📚 Extracted Experience Superset")
+                
+                superset_text = processed_data["processed_texts"].get("superset", "")
+                if superset_text:
+                    with st.expander("🔍 View Experience Superset Content", expanded=False):
+                        st.text_area(
+                            "Experience Superset Text",
+                            superset_text,
+                            height=400,
+                            help="This is the text extracted from your experience superset PDF - contains your full background"
+                        )
+                        st.caption(f"Experience Superset: {len(superset_text.split())} words, {len(superset_text)} characters")
+                else:
+                    st.warning("No experience superset text was extracted")
+                
             except Exception as e:
                 st.error(f"❌ **Document Processing Failed**")
                 st.error(f"**Error Details:** {str(e)}")
