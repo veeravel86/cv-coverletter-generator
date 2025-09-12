@@ -10,7 +10,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, KeepTogether
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
-from reportlab.lib.colors import black, darkblue
+from reportlab.lib.colors import black, darkblue, HexColor
 
 from services.style_extract import StyleProfile
 
@@ -340,6 +340,374 @@ class PDFExporter:
         except Exception as e:
             logger.error(f"Error exporting cover letter to PDF: {e}")
             raise e
+    
+    def create_professional_cv_pdf(self, cv_content: str, contact_info: Dict[str, str], 
+                                  color_scheme: str = "teal") -> str:
+        """Create a professionally formatted CV PDF with the specified design"""
+        
+        try:
+            # Validate input parameters
+            if not cv_content or not cv_content.strip():
+                raise ValueError("CV content is empty or None")
+            
+            if not contact_info or not contact_info.get('name'):
+                raise ValueError("Contact information missing or invalid")
+            
+            if len(cv_content.strip()) < 50:
+                raise ValueError(f"CV content too short ({len(cv_content)} characters)")
+            
+            # Setup color scheme
+            colors = self._get_color_scheme(color_scheme)
+            
+            # Create output path
+            outputs_dir = Path("outputs")
+            outputs_dir.mkdir(exist_ok=True)
+            output_path = outputs_dir / f"Professional_CV_{contact_info['name'].replace(' ', '_')}.pdf"
+            
+            # Create PDF document
+            doc = SimpleDocTemplate(
+                str(output_path),
+                pagesize=A4,
+                rightMargin=0.7*inch,
+                leftMargin=0.7*inch,
+                topMargin=0.8*inch,
+                bottomMargin=0.8*inch
+            )
+            
+            story = []
+            
+            # Setup professional styles
+            prof_styles = self._create_professional_styles(colors)
+            
+            # 1. Header Section - Single line contact info
+            contact_header = self._format_contact_header(contact_info)
+            story.append(Paragraph(contact_header, prof_styles['ContactHeader']))
+            story.append(Spacer(1, 0.3*inch))
+            
+            # Parse CV sections
+            sections = self._parse_professional_cv_sections(cv_content)
+            
+            # 2. Professional Summary (≤30 words)
+            if 'summary' in sections:
+                story.append(Paragraph("PROFESSIONAL SUMMARY", prof_styles['SectionHeading']))
+                story.append(Spacer(1, 0.1*inch))
+                story.append(Paragraph(sections['summary'], prof_styles['BodyText']))
+                story.append(Spacer(1, 0.2*inch))
+            
+            # 3. Skills Section - Visual boxes, 4 per row
+            if 'skills' in sections:
+                story.append(Paragraph("CORE SKILLS", prof_styles['SectionHeading']))
+                story.append(Spacer(1, 0.1*inch))
+                self._add_skills_boxes(story, sections['skills'], prof_styles, colors)
+                story.append(Spacer(1, 0.2*inch))
+            
+            # 4. Experience Section - Two-Tier System
+            if 'experience' in sections:
+                story.append(Paragraph("PROFESSIONAL EXPERIENCE", prof_styles['SectionHeading']))
+                story.append(Spacer(1, 0.1*inch))
+                self._add_professional_experience(story, sections['experience'], prof_styles, colors)
+                story.append(Spacer(1, 0.2*inch))
+            
+            # 5. Previous Experience (if available)
+            if 'previous_experience' in sections:
+                self._add_previous_experience(story, sections['previous_experience'], prof_styles)
+                story.append(Spacer(1, 0.2*inch))
+            
+            # 6. Additional Information Table
+            if 'additional_info' in sections:
+                story.append(Paragraph("ADDITIONAL INFORMATION", prof_styles['SectionHeading']))
+                story.append(Spacer(1, 0.1*inch))
+                self._add_additional_info_table(story, sections['additional_info'], prof_styles)
+            
+            # Validate that we have content to put in the PDF
+            if not story:
+                raise ValueError("No content sections were generated for the PDF")
+            
+            if len(story) < 3:  # Should have at least contact, summary, and one other section
+                raise ValueError(f"Insufficient PDF content sections ({len(story)})")
+            
+            # Build PDF
+            doc.build(story)
+            
+            # Validate the generated PDF file
+            if not os.path.exists(output_path):
+                raise Exception("PDF file was not created successfully")
+            
+            file_size = os.path.getsize(output_path)
+            if file_size < 2000:  # Professional PDF should be at least 2KB
+                raise Exception(f"Generated PDF is too small ({file_size} bytes), likely empty or corrupted")
+            
+            logger.info(f"Professional CV exported to PDF: {output_path} ({file_size} bytes)")
+            return str(output_path)
+            
+        except Exception as e:
+            logger.error(f"Error creating professional CV PDF: {e}")
+            raise e
+    
+    def _get_color_scheme(self, scheme: str) -> Dict[str, Any]:
+        """Get color scheme configuration"""
+        schemes = {
+            "teal": {
+                "primary": HexColor("#008B8B"),    # Dark Teal
+                "secondary": HexColor("#20B2AA"),  # Light Sea Green
+                "accent": HexColor("#4682B4"),     # Steel Blue
+                "text": black
+            },
+            "blue": {
+                "primary": HexColor("#003366"),
+                "secondary": HexColor("#336699"),
+                "accent": HexColor("#6699CC"),
+                "text": black
+            }
+        }
+        return schemes.get(scheme, schemes["teal"])
+    
+    def _create_professional_styles(self, colors: Dict[str, Any]) -> Dict[str, ParagraphStyle]:
+        """Create professional paragraph styles"""
+        
+        styles = {}
+        
+        # Contact header style
+        styles['ContactHeader'] = ParagraphStyle(
+            name='ContactHeader',
+            fontSize=11,
+            textColor=colors["text"],
+            alignment=TA_CENTER,
+            spaceAfter=0
+        )
+        
+        # Section heading style
+        styles['SectionHeading'] = ParagraphStyle(
+            name='SectionHeading',
+            fontSize=12,
+            textColor=colors["primary"],
+            fontName='Helvetica-Bold',
+            spaceBefore=6,
+            spaceAfter=6,
+            borderWidth=1,
+            borderColor=colors["primary"],
+            borderPadding=3
+        )
+        
+        # Body text style
+        styles['BodyText'] = ParagraphStyle(
+            name='BodyText',
+            fontSize=10,
+            textColor=colors["text"],
+            alignment=TA_JUSTIFY,
+            spaceAfter=4
+        )
+        
+        # Skills box style
+        styles['SkillBox'] = ParagraphStyle(
+            name='SkillBox',
+            fontSize=9,
+            textColor=colors["text"],
+            backColor=colors["secondary"],
+            alignment=TA_CENTER,
+            borderWidth=1,
+            borderColor=colors["primary"],
+            borderPadding=4
+        )
+        
+        # Job title style
+        styles['JobTitle'] = ParagraphStyle(
+            name='JobTitle',
+            fontSize=11,
+            textColor=colors["primary"],
+            fontName='Helvetica-Bold',
+            spaceBefore=6,
+            spaceAfter=3
+        )
+        
+        # Experience bullet style
+        styles['ExperienceBullet'] = ParagraphStyle(
+            name='ExperienceBullet',
+            fontSize=10,
+            textColor=colors["text"],
+            leftIndent=0.2*inch,
+            bulletIndent=0.1*inch,
+            spaceAfter=3
+        )
+        
+        return styles
+    
+    def _format_contact_header(self, contact_info: Dict[str, str]) -> str:
+        """Format contact information as single line with pipe separators"""
+        parts = []
+        
+        if contact_info.get('name'):
+            parts.append(f"<b>{contact_info['name']}</b>")
+        
+        if contact_info.get('email'):
+            parts.append(f"📧 {contact_info['email']}")
+        
+        if contact_info.get('phone'):
+            parts.append(f"📞 {contact_info['phone']}")
+        
+        if contact_info.get('location'):
+            parts.append(f"📍 {contact_info['location']}")
+        
+        if contact_info.get('linkedin'):
+            linkedin_clean = contact_info['linkedin'].replace('https://', '').replace('http://', '')
+            parts.append(f"💼 {linkedin_clean}")
+        
+        if contact_info.get('website'):
+            website_clean = contact_info['website'].replace('https://', '').replace('http://', '')
+            parts.append(f"🌐 {website_clean}")
+        
+        return " | ".join(parts)
+    
+    def _parse_professional_cv_sections(self, cv_content: str) -> Dict[str, str]:
+        """Parse the professionally formatted CV content with enhanced validation"""
+        sections = {}
+        current_section = None
+        current_content = []
+        
+        if not cv_content or not cv_content.strip():
+            logger.warning("Empty CV content provided for parsing")
+            return sections
+        
+        lines = cv_content.split('\n')
+        
+        for line in lines:
+            line_stripped = line.strip()
+            
+            if line_stripped.startswith('**') and line_stripped.endswith('**'):
+                # Section header
+                if current_section and current_content:
+                    content = '\n'.join(current_content).strip()
+                    if content:  # Only add non-empty sections
+                        sections[current_section] = content
+                
+                section_name = line_stripped.replace('**', '').lower().replace(' ', '_')
+                if 'professional_summary' in section_name:
+                    current_section = 'summary'
+                elif 'core_skills' in section_name or 'skills' in section_name:
+                    current_section = 'skills'
+                elif 'professional_experience' in section_name:
+                    current_section = 'experience'
+                elif 'previous_roles' in section_name:
+                    current_section = 'previous_experience'
+                elif 'additional_information' in section_name:
+                    current_section = 'additional_info'
+                else:
+                    current_section = section_name
+                
+                current_content = []
+                
+            elif line_stripped == '---':
+                # Section separator
+                continue
+            else:
+                if current_section and line_stripped:
+                    current_content.append(line_stripped)
+        
+        # Add the last section
+        if current_section and current_content:
+            content = '\n'.join(current_content).strip()
+            if content:  # Only add non-empty sections
+                sections[current_section] = content
+        
+        # Log sections found for debugging
+        logger.info(f"Parsed CV sections: {list(sections.keys())}")
+        
+        # Validate that we have minimum required sections
+        required_sections = ['summary', 'skills', 'experience']
+        found_sections = [s for s in required_sections if s in sections and sections[s].strip()]
+        
+        if len(found_sections) < 2:
+            logger.warning(f"Insufficient sections found: {found_sections}. Required: {required_sections}")
+        
+        return sections
+    
+    def _add_skills_boxes(self, story: List, skills_text: str, styles: Dict, colors: Dict):
+        """Add skills in colored boxes, 4 per row"""
+        import re
+        
+        # Extract skills
+        skills = []
+        lines = skills_text.split('\n')
+        for line in lines:
+            if '|' in line:
+                # Split by pipe and clean each skill
+                row_skills = [skill.strip().replace('**', '') for skill in line.split('|')]
+                skills.extend([skill for skill in row_skills if skill])
+        
+        # Create skill boxes in rows of 4
+        for i in range(0, len(skills), 4):
+            row_skills = skills[i:i+4]
+            skill_row = " | ".join([f'<span backcolor="{colors["secondary"]}" color="white"><b> {skill} </b></span>' for skill in row_skills])
+            story.append(Paragraph(skill_row, styles['BodyText']))
+            story.append(Spacer(1, 0.05*inch))
+    
+    def _add_professional_experience(self, story: List, experience_text: str, styles: Dict, colors: Dict):
+        """Add current role with detailed 8 bullets"""
+        lines = experience_text.split('\n')
+        
+        # Add job title
+        for line in lines:
+            if '|' in line and 'Present' in line:
+                story.append(Paragraph(f'<b>{line}</b>', styles['JobTitle']))
+                story.append(Spacer(1, 0.1*inch))
+                break
+        
+        # Add experience bullets
+        bullet_count = 0
+        for line in lines:
+            if line.strip().startswith('•') and bullet_count < 8:
+                bullet_text = line.strip()[1:].strip()
+                if ':' in bullet_text:
+                    # Format with bold heading
+                    parts = bullet_text.split(':', 1)
+                    formatted_bullet = f'• <b>{parts[0].strip()}</b>: {parts[1].strip()}'
+                else:
+                    formatted_bullet = f'• {bullet_text}'
+                
+                story.append(Paragraph(formatted_bullet, styles['ExperienceBullet']))
+                bullet_count += 1
+    
+    def _add_previous_experience(self, story: List, prev_exp_text: str, styles: Dict):
+        """Add previous experience section (concise)"""
+        story.append(Paragraph("<b>Previous Roles</b>", styles['JobTitle']))
+        story.append(Spacer(1, 0.1*inch))
+        
+        # Format previous experience concisely
+        lines = prev_exp_text.split('\n')
+        for line in lines:
+            if line.strip():
+                story.append(Paragraph(line.strip(), styles['BodyText']))
+    
+    def _add_additional_info_table(self, story: List, additional_info_text: str, styles: Dict):
+        """Add additional information as a clean table"""
+        from reportlab.platypus import Table, TableStyle
+        
+        # Parse table content
+        lines = additional_info_text.split('\n')
+        table_data = []
+        
+        for line in lines:
+            if '|' in line and not line.startswith('|--'):
+                # Parse table row
+                parts = [part.strip() for part in line.split('|') if part.strip()]
+                if len(parts) >= 2:
+                    table_data.append(parts[:2])  # Take first 2 columns
+        
+        if table_data:
+            # Create table
+            table = Table(table_data, colWidths=[2*inch, 4*inch])
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), HexColor("#E0E0E0")),
+                ('TEXTCOLOR', (0, 0), (-1, 0), black),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('BACKGROUND', (0, 1), (-1, -1), HexColor("#F8F8F8")),
+                ('GRID', (0, 0), (-1, -1), 1, black)
+            ]))
+            
+            story.append(table)
 
 @st.cache_resource
 def get_pdf_exporter():
