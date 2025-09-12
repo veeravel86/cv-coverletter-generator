@@ -167,21 +167,21 @@ def assemble_cv_from_components(skills_result, experience_result, summary_result
         cv_sections.append("john.doe@email.com | +1-555-123-4567 | Location: New York, NY | LinkedIn: linkedin.com/in/johndoe")
     cv_sections.append("")
     
-    # Professional Summary (from LLM)
+    # Professional Summary (from LLM) - Use "CAREER SUMMARY" for PDF compatibility
     if summary_result and summary_result["summary"]:
-        cv_sections.append("## PROFESSIONAL SUMMARY")
+        cv_sections.append("## CAREER SUMMARY")
         cv_sections.append(summary_result["summary"])
         cv_sections.append("")
     
-    # Core Skills (from LLM)
+    # Core Skills (from LLM) - Use "SKILLS" for PDF compatibility
     if skills_result and skills_result["skills"]:
-        cv_sections.append("## CORE SKILLS")
+        cv_sections.append("## SKILLS")
         for skill in skills_result["skills"]:
             cv_sections.append(f"• {skill}")
         cv_sections.append("")
     
-    # Professional Experience
-    cv_sections.append("## PROFESSIONAL EXPERIENCE")
+    # Professional Experience - Use "EXPERIENCE" for PDF compatibility
+    cv_sections.append("## EXPERIENCE")
     cv_sections.append("")
     
     # Current Experience (from LLM - use generated bullets)
@@ -807,8 +807,31 @@ def handle_download():
                     st.write("🔍 **PDF Export Debug:**")
                     st.write(f"CV content length: {len(st.session_state.generated_cv):,} characters")
                     
+                    # Parse sections to see what PDF exporter will find
+                    from exporters.pdf_export import PDFExporter
+                    temp_exporter = PDFExporter()
+                    parsed_sections = temp_exporter._parse_markdown_cv(st.session_state.generated_cv)
+                    
+                    debug_pdf_col1, debug_pdf_col2 = st.columns(2)
+                    with debug_pdf_col1:
+                        st.write("**Sections Found by PDF Parser:**")
+                        for section_key in parsed_sections.keys():
+                            st.write(f"  ✅ {section_key}")
+                    
+                    with debug_pdf_col2:
+                        st.write("**Expected Sections:**")
+                        expected_sections = ['contact_information', 'career_summary', 'skills', 'experience', 'education']
+                        for section in expected_sections:
+                            status = "✅" if section in parsed_sections else "❌"
+                            st.write(f"  {status} {section}")
+                    
                     with st.expander("📄 **CV Content for PDF**", expanded=False):
                         st.text_area("CV Content Being Exported", st.session_state.generated_cv, height=200, key="pdf_debug_content")
+                    
+                    with st.expander("🔍 **Parsed Sections Content**", expanded=False):
+                        for section_key, content in parsed_sections.items():
+                            st.write(f"**{section_key}:**")
+                            st.text_area(f"Content for {section_key}", content[:500] + "..." if len(content) > 500 else content, height=100, key=f"debug_{section_key}")
                     
                     if st.session_state.style_profile:
                         pdf_exporter.export_to_pdf(
