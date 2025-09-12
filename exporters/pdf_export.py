@@ -868,6 +868,17 @@ class PDFExporter:
             spaceAfter=4
         )
         
+        # Job titles for previous roles
+        styles['JobTitle'] = ParagraphStyle(
+            'JobTitle',
+            parent=self.styles['Normal'],
+            fontSize=11,
+            textColor=colors['secondary'],
+            spaceBefore=8,
+            spaceAfter=4,
+            leftIndent=0
+        )
+        
         return styles
     
     def _clean_text_content(self, content: str) -> str:

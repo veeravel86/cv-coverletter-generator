@@ -1152,7 +1152,7 @@ OUTPUT FORMAT:
 Return the exact work experience section text as it appears in the CV, with no modifications.
 """
             
-            extracted_experience = llm_service.generate_content(extraction_prompt, max_tokens=1500)
+            extracted_experience = llm_service.generate_content(extraction_prompt, max_tokens=3000)
             
             # Second LLM call to strictly extract only previous (non-current) roles
             extraction_prompt_strict = f"""
@@ -1188,7 +1188,7 @@ OUTPUT FORMAT:
 Return only the previous work experience entries exactly as they appear in the original CV content, excluding the most recent/current role.
 """
             
-            response = llm_service.generate_content(extraction_prompt_strict, max_tokens=1000)
+            response = llm_service.generate_content(extraction_prompt_strict, max_tokens=2500)
             
             # Validation step: Check if extracted content contains information from the original CV
             if response and "No previous roles found" not in response:
