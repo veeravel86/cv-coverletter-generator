@@ -274,6 +274,13 @@ def handle_generation(generation_mode):
         if st.button("📋 Generate Previous Experience Summary", help="Summarize previous work experience"):
             generate_previous_experience_summary(llm_service, context_builder)
     
+    # Display all generated individual sections persistently
+    st.markdown("---")
+    st.subheader("📄 Generated Individual Sections")
+    st.markdown("Review and edit your generated content sections")
+    
+    display_individual_sections()
+    
     # Generate Whole CV Section
     st.markdown("---")
     st.subheader("📄 Complete CV Generation")
@@ -288,17 +295,53 @@ def handle_generation(generation_mode):
         
         with whole_cv_cols[0]:
             # Contact information input
-            st.markdown("##### 📞 Contact Information")
+            contact_header_cols = st.columns([3, 1])
+            with contact_header_cols[0]:
+                st.markdown("##### 📞 Contact Information")
+            with contact_header_cols[1]:
+                if st.button("🔄 Auto-fill from Sample CV", help="Extract contact info from uploaded Sample CV"):
+                    if 'sample_cv_content' not in st.session_state or not st.session_state.sample_cv_content:
+                        st.warning("⚠️ Please upload a Sample CV first to auto-fill contact information")
+                    else:
+                        with st.spinner("📋 Extracting contact information from Sample CV..."):
+                            contact_info = extract_contact_info_from_cv(llm_service)
+                            if contact_info:
+                                # Store in session state to populate form fields
+                                st.session_state.auto_contact_info = contact_info
+                                st.success("✅ Contact information extracted successfully!")
+                                st.rerun()
+            
+            # Get values from auto-extracted info if available
+            auto_info = st.session_state.get('auto_contact_info', {})
+            
             contact_cols = st.columns(3)
             with contact_cols[0]:
-                name = st.text_input("Full Name", placeholder="John Doe", key="cv_name")
-                email = st.text_input("Email", placeholder="john.doe@email.com", key="cv_email")
+                name = st.text_input("Full Name", 
+                                   value=auto_info.get('name', ''), 
+                                   placeholder="John Doe", 
+                                   key="cv_name")
+                email = st.text_input("Email", 
+                                    value=auto_info.get('email', ''), 
+                                    placeholder="john.doe@email.com", 
+                                    key="cv_email")
             with contact_cols[1]:
-                phone = st.text_input("Phone", placeholder="+1-234-567-8900", key="cv_phone")
-                location = st.text_input("Location", placeholder="City, Country", key="cv_location")
+                phone = st.text_input("Phone", 
+                                    value=auto_info.get('phone', ''), 
+                                    placeholder="+1-234-567-8900", 
+                                    key="cv_phone")
+                location = st.text_input("Location", 
+                                       value=auto_info.get('location', ''), 
+                                       placeholder="City, Country", 
+                                       key="cv_location")
             with contact_cols[2]:
-                linkedin = st.text_input("LinkedIn", placeholder="linkedin.com/in/johndoe", key="cv_linkedin")
-                website = st.text_input("Website/Portfolio", placeholder="johndoe.com", key="cv_website")
+                linkedin = st.text_input("LinkedIn", 
+                                        value=auto_info.get('linkedin', ''), 
+                                        placeholder="linkedin.com/in/johndoe", 
+                                        key="cv_linkedin")
+                website = st.text_input("Website/Portfolio", 
+                                       value=auto_info.get('website', ''), 
+                                       placeholder="johndoe.com", 
+                                       key="cv_website")
         
         with whole_cv_cols[1]:
             st.markdown("##### ✅ Available Sections")
@@ -767,6 +810,126 @@ def clean_generated_content(content: str) -> str:
     
     return '\n'.join(cleaned_lines)
 
+def extract_contact_info_from_cv(llm_service):
+    """Extract contact information from Sample CV using LLM"""
+    
+    if 'sample_cv_content' not in st.session_state or not st.session_state.sample_cv_content:
+        return None
+    
+    sample_cv_content = st.session_state.sample_cv_content
+    
+    contact_extraction_prompt = f"""
+You are an expert CV parser. Extract contact information from the following CV content.
+
+CV CONTENT:
+{sample_cv_content}
+
+GOAL:
+Extract the following contact information from the CV:
+1. Full Name (first and last name)
+2. Email address
+3. Phone number 
+4. Location/Address (city, state/country)
+5. LinkedIn profile URL
+6. Website/Portfolio URL
+
+REQUIREMENTS:
+- Look for contact information typically found at the top of CVs
+- Extract exact information as written in the CV
+- If any field is not found, return "Not found" for that field
+- Be precise and extract only what is clearly stated
+- For LinkedIn, extract the full profile URL if available, or just the username
+- For location, extract city and country/state as written
+
+OUTPUT FORMAT:
+Return the information in this exact JSON format:
+{{
+    "name": "Full Name Here",
+    "email": "email@example.com", 
+    "phone": "+1-234-567-8900",
+    "location": "City, Country",
+    "linkedin": "linkedin.com/in/username or full URL",
+    "website": "website.com or full URL"
+}}
+
+If any field is not found in the CV, use "Not found" as the value.
+"""
+    
+    try:
+        response = llm_service.generate_content(contact_extraction_prompt, max_tokens=300)
+        
+        # Parse JSON response
+        import json
+        import re
+        
+        # Extract JSON from response (in case there's extra text)
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(0)
+            contact_info = json.loads(json_str)
+            
+            # Clean up "Not found" values to empty strings for better UX
+            for key, value in contact_info.items():
+                if isinstance(value, str) and value.lower() in ['not found', 'n/a', 'none', '']:
+                    contact_info[key] = ""
+            
+            return contact_info
+        else:
+            st.warning("Could not parse contact information from Sample CV")
+            return None
+            
+    except Exception as e:
+        st.error(f"Error extracting contact information: {str(e)}")
+        return None
+
+def display_individual_sections():
+    """Display all generated individual sections in persistent expandable format"""
+    
+    if 'individual_generations' not in st.session_state or not st.session_state.individual_generations:
+        st.info("💡 No individual sections generated yet. Use the generation buttons above to create content.")
+        return
+    
+    # Display each generated section with appropriate formatting
+    sections_config = {
+        'top_skills': {
+            'title': '🎯 Top 10 Skills',
+            'subtitle': 'JD-aligned technical competencies (≤2 words each)',
+            'caption': '🎯 Skills ranked by job description relevance',
+            'icon': '🎯'
+        },
+        'experience_bullets': {
+            'title': '⚡ Top 8 Experience Bullets',
+            'subtitle': 'SAR format with two-word headings',
+            'caption': '⚡ Achievement-focused bullets ranked by relevance',
+            'icon': '⚡'
+        },
+        'executive_summary': {
+            'title': '📊 Executive Summary',
+            'subtitle': 'Professional career summary (≤40 words)',
+            'caption': '📊 ATS-optimized executive-level summary',
+            'icon': '📊'
+        },
+        'previous_experience': {
+            'title': '📋 Previous Experience Summary',
+            'subtitle': 'Extracted from Sample CV - Previous roles only (excluding current position)',
+            'caption': '🏢 Career progression overview from Sample CV (past roles only)',
+            'icon': '📋'
+        }
+    }
+    
+    for section_key, config in sections_config.items():
+        if section_key in st.session_state.individual_generations:
+            content = st.session_state.individual_generations[section_key]
+            if content and content.strip():
+                with st.expander(f"{config['icon']} {config['title']} - Click to expand", expanded=False):
+                    st.markdown(f"### {config['title']}")
+                    st.markdown(f"*{config['subtitle']}*")
+                    st.markdown("---")
+                    # Clean content to ensure only headings are bold
+                    cleaned_content = clean_generated_content(content)
+                    st.markdown(cleaned_content)
+                    st.caption(config['caption'])
+
 def generate_top_skills(llm_service, context_builder):
     """Generate top 10 skills with expandable display using professional ATS-optimized prompt"""
     
@@ -843,13 +1006,8 @@ BEGIN."""
                 st.session_state.individual_generations = {}
             st.session_state.individual_generations['top_skills'] = response
             
-            # Display with expander
-            with st.expander("🛠️ Top 10 Skills - Click to expand", expanded=True):
-                st.markdown("### Generated Skills")
-                st.markdown("*JD-aligned skills prioritized by relevance and supported by experience superset*")
-                st.markdown("---")
-                st.code(response, language=None)  # Display as plain text for clean skill list
-                st.caption("🎯 Skills derived from JD language and ranked by priority (≤2 words each)")
+            st.success("✅ Top 10 Skills generated successfully!")
+            st.info("👁️ View your generated content in the 'Generated Individual Sections' below")
             
         except Exception as e:
             st.error(f"❌ Error generating skills: {str(e)}")
@@ -938,15 +1096,8 @@ BEGIN."""
                 st.session_state.individual_generations = {}
             st.session_state.individual_generations['experience_bullets'] = response
             
-            # Display with expander
-            with st.expander("💼 Top 8 Experience Bullets - Click to expand", expanded=True):
-                st.markdown("### Generated Experience Bullets")
-                st.markdown("*ATS-optimized bullets aligned with job requirements and prioritized by relevance*")
-                st.markdown("---")
-                # Clean content to ensure only headings are bold
-                cleaned_response = clean_generated_content(response)
-                st.markdown(cleaned_response)
-                st.caption("🎯 Professional SAR-format bullets optimized for ATS and hiring managers")
+            st.success("✅ Top 8 Experience Bullets generated successfully!")
+            st.info("👁️ View your generated content in the 'Generated Individual Sections' below")
             
         except Exception as e:
             st.error(f"❌ Error generating experience bullets: {str(e)}")
@@ -1024,15 +1175,8 @@ BEGIN."""
                 st.session_state.individual_generations = {}
             st.session_state.individual_generations['executive_summary'] = response
             
-            # Display with expander
-            with st.expander("📊 Executive Summary - Click to expand", expanded=True):
-                st.markdown("### Generated Career Summary")
-                st.markdown("*Executive-level summary aligned with JD requirements and optimized for ATS*")
-                st.markdown("---")
-                # Display the summary in a highlighted box (no additional bold formatting)
-                st.info(response.strip())
-                word_count = len(response.strip().split())
-                st.caption(f"📊 Word count: {word_count} words (target: ≤40 words) | 🎯 CTO-level executive tone")
+            st.success("✅ Executive Summary generated successfully!")
+            st.info("👁️ View your generated content in the 'Generated Individual Sections' below")
             
         except Exception as e:
             st.error(f"❌ Error generating executive summary: {str(e)}")
@@ -1106,15 +1250,8 @@ Do not include the current/most recent position in this summary.
                 st.session_state.individual_generations = {}
             st.session_state.individual_generations['previous_experience'] = response
             
-            # Display with expander
-            with st.expander("📋 Previous Experience Summary - Click to expand", expanded=True):
-                st.markdown("### Generated Previous Experience Summary")
-                st.markdown("*Extracted from Sample CV - Previous roles only (excluding current position)*")
-                st.markdown("---")
-                # Clean content to ensure only headings are bold
-                cleaned_response = clean_generated_content(response)
-                st.markdown(cleaned_response)
-                st.caption("🏢 Career progression overview from Sample CV (past roles only)")
+            st.success("✅ Previous Experience Summary generated successfully!")
+            st.info("👁️ View your generated content in the 'Generated Individual Sections' below")
             
         except Exception as e:
             st.error(f"❌ Error generating previous experience summary: {str(e)}")
@@ -1218,12 +1355,8 @@ def validate_cv_content(executive_summary, top_skills, experience_bullets):
         if len(skills_lines) < 3:
             issues.append("Skills section needs at least 3 skills")
     
-    # Check experience bullets
-    if experience_bullets:
-        bullet_lines = [line.strip() for line in experience_bullets.split('\n') 
-                       if line.strip() and ('•' in line or ':' in line)]
-        if len(bullet_lines) < 3:
-            issues.append("Experience bullets need at least 3 bullet points")
+    # Check experience bullets (no minimum restriction needed)
+    # Previous experience can have any number of bullet points
     
     # Check that we have meaningful content overall
     total_content = f"{executive_summary} {top_skills} {experience_bullets}"
