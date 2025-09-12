@@ -170,13 +170,12 @@ STRICT RULES - ABSOLUTE REQUIREMENTS:
 - DO NOT change the meaning or content of any sentences
 - DO NOT summarize, paraphrase, or rewrite any content
 - DO NOT add new information that wasn't in the original
-- PRESERVE all dates, numbers, company names, project names, achievements, skills, and details EXACTLY as written
+- PRESERVE all dates, numbers, company names, project names, achievements, and details EXACTLY as written
 - PRESERVE all quantified achievements (percentages, numbers, metrics) exactly as stated
 - Your job is ONLY to organize and format, not to edit or improve content
 - If there are multiple similar entries, keep ALL of them - do not consolidate or merge
 
 TASK: Take ALL the text provided and organize it under appropriate headings:
-- TECHNICAL SKILLS
 - WORK EXPERIENCE  
 - KEY PROJECTS
 - ACHIEVEMENTS
@@ -194,7 +193,7 @@ FORMATTING GUIDELINES:
 - If you're unsure where something belongs, put it in "ADDITIONAL INFORMATION"
 - Maintain original date formats unless they are clearly corrupted
 
-MANDATORY VERIFICATION: After formatting, verify that EVERY single piece of information, skill, project, achievement, date, and detail from the original text appears somewhere in your organized output. Nothing should be missing.
+MANDATORY VERIFICATION: After formatting, verify that EVERY single piece of information, project, achievement, date, and detail from the original text appears somewhere in your organized output. Nothing should be missing.
 
 Raw experience text to process:
 """
@@ -219,6 +218,66 @@ Raw experience text to process:
             
         except Exception as e:
             logger.error(f"Error structuring experience content with LLM: {e}")
+            return raw_text  # Fallback to original text
+    
+    def structure_skills_superset_content(self, raw_text: str) -> str:
+        """Use LLM to structure skills superset content with proper headings"""
+        try:
+            prompt = """
+CRITICAL INSTRUCTIONS: You are a formatting assistant. Your ONLY job is to organize existing content under proper headings.
+
+STRICT RULES - ABSOLUTE REQUIREMENTS:
+- DO NOT remove, delete, or omit ANY information from the original text
+- DO NOT change the meaning or content of any sentences
+- DO NOT summarize, paraphrase, or rewrite any content
+- DO NOT add new information that wasn't in the original
+- PRESERVE all skill names, technologies, proficiency levels, and details EXACTLY as written
+- Your job is ONLY to organize and format, not to edit or improve content
+- If there are multiple similar entries, keep ALL of them - do not consolidate or merge
+
+TASK: Take ALL the text provided and organize it under appropriate headings:
+- PROGRAMMING LANGUAGES
+- FRAMEWORKS AND LIBRARIES
+- DATABASES
+- CLOUD PLATFORMS
+- TOOLS AND TECHNOLOGIES
+- SOFT SKILLS
+- CERTIFICATIONS (if present)
+- ADDITIONAL SKILLS (for content that doesn't fit other categories)
+
+FORMATTING GUIDELINES:
+- Use ALL CAPS for section headings
+- Use • for bullet points
+- Keep all original content exactly as provided
+- Only remove obvious PDF artifacts (repeated characters, page numbers, footers)
+- If you're unsure where something belongs, put it in "ADDITIONAL SKILLS"
+- Group similar skills together but preserve all individual entries
+
+MANDATORY VERIFICATION: After formatting, verify that EVERY single skill, technology, tool, and detail from the original text appears somewhere in your organized output. Nothing should be missing.
+
+Raw skills text to process:
+"""
+
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a formatting assistant. Your ONLY job is to organize content under headings. You must preserve ALL information exactly as provided. Do not change, remove, or modify any content - only organize it under appropriate headings."},
+                    {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
+                ],
+                temperature=0.0,  # Set to 0 for maximum consistency
+                max_tokens=4000
+            )
+            
+            structured_content = response.choices[0].message.content.strip()
+            
+            if "NO SKILLS CONTENT FOUND" in structured_content:
+                logger.warning("LLM could not structure skills content")
+                return raw_text  # Fallback to original text
+            
+            return structured_content
+            
+        except Exception as e:
+            logger.error(f"Error structuring skills content with LLM: {e}")
             return raw_text  # Fallback to original text
     
     def create_documents(self, texts: Dict[str, str]) -> List[Document]:
@@ -268,9 +327,15 @@ Raw experience text to process:
                             processed_texts[doc_type] = processed_text
                             st.success(f"✅ {doc_type} structured with proper headings ({len(processed_text)} characters)")
                     
-                    elif doc_type == "superset" and raw_text:
+                    elif doc_type == "experience_superset" and raw_text:
                         with st.spinner("🤖 Structuring experience superset content..."):
                             processed_text = self.structure_experience_superset_content(raw_text)
+                            processed_texts[doc_type] = processed_text
+                            st.success(f"✅ {doc_type} structured with proper headings ({len(processed_text)} characters)")
+                    
+                    elif doc_type == "skills_superset" and raw_text:
+                        with st.spinner("🤖 Structuring skills superset content..."):
+                            processed_text = self.structure_skills_superset_content(raw_text)
                             processed_texts[doc_type] = processed_text
                             st.success(f"✅ {doc_type} structured with proper headings ({len(processed_text)} characters)")
                     

@@ -82,7 +82,7 @@ def main():
 def handle_document_upload():
     st.header("📄 Document Upload")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     
     with col1:
         st.subheader("Job Description")
@@ -92,17 +92,24 @@ def handle_document_upload():
             key="job_description",
             help="The target job description PDF"
         )
+        
+        st.subheader("Skills Superset")
+        skills_superset = st.file_uploader(
+            "Upload Skills_Superset.pdf", 
+            type=['pdf'],
+            key="skills_superset",
+            help="Your comprehensive skills and technologies document"
+        )
     
     with col2:
         st.subheader("Experience Superset")
-        superset = st.file_uploader(
-            "Upload CV_ExperienceSummary_Skills_Superset.pdf", 
+        experience_superset = st.file_uploader(
+            "Upload Experience_Superset.pdf", 
             type=['pdf'],
-            key="superset",
-            help="Your comprehensive experience and skills document"
+            key="experience_superset",
+            help="Your comprehensive work experience and projects document"
         )
-    
-    with col3:
+        
         st.subheader("Sample CV Style")
         sample_cv = st.file_uploader(
             "Upload Sample_CV.pdf",
@@ -112,8 +119,8 @@ def handle_document_upload():
         )
     
     if st.button("🔄 Process Documents", type="primary"):
-        if not all([job_description, superset, sample_cv]):
-            st.error("❌ Please upload all three PDF files")
+        if not all([job_description, skills_superset, experience_superset, sample_cv]):
+            st.error("❌ Please upload all four PDF files")
             return
         
         with st.spinner("Processing documents..."):
@@ -122,7 +129,8 @@ def handle_document_upload():
                 
                 uploaded_files = {
                     "job_description": job_description,
-                    "superset": superset,
+                    "skills_superset": skills_superset,
+                    "experience_superset": experience_superset,
                     "sample_cv": sample_cv
                 }
                 
@@ -202,30 +210,57 @@ def handle_document_upload():
                 else:
                     st.warning("No sample CV text was extracted")
                 
+                # Display structured Skills Superset content
+                st.divider()
+                st.subheader("🛠️ Structured Skills Superset")
+                
+                skills_text = processed_data["processed_texts"].get("skills_superset", "")
+                if skills_text:
+                    st.text_area(
+                        "Skills Superset Content (Structured by AI)",
+                        skills_text,
+                        height=400,
+                        help="This is the skills superset content structured by AI with proper headings and formatting"
+                    )
+                    st.info(f"📊 Structured Skills Superset: {len(skills_text.split())} words, {len(skills_text)} characters")
+                    
+                    # Option to view original raw text
+                    with st.expander("🔍 View Original Raw Skills Superset Text"):
+                        raw_skills = processed_data["texts"].get("skills_superset", "")
+                        st.text_area(
+                            "Original Skills Superset Text",
+                            raw_skills,
+                            height=200,
+                            help="This is the original text extracted directly from the skills superset PDF"
+                        )
+                        st.caption(f"Raw skills: {len(raw_skills.split())} words, {len(raw_skills)} characters")
+                else:
+                    st.warning("No skills superset text was extracted")
+                
                 # Display structured Experience Superset content
                 st.divider()
-                st.subheader("📚 Structured Experience Superset")
+                st.subheader("💼 Structured Experience Superset")
                 
-                superset_text = processed_data["processed_texts"].get("superset", "")
-                if superset_text:
+                experience_text = processed_data["processed_texts"].get("experience_superset", "")
+                if experience_text:
                     st.text_area(
                         "Experience Superset Content (Structured by AI)",
-                        superset_text,
+                        experience_text,
                         height=400,
                         help="This is the experience superset content structured by AI with proper headings and formatting"
                     )
-                    st.info(f"📊 Structured Experience Superset: {len(superset_text.split())} words, {len(superset_text)} characters")
+                    st.info(f"📊 Structured Experience Superset: {len(experience_text.split())} words, {len(experience_text)} characters")
                     
                     # Option to view original raw text
                     with st.expander("🔍 View Original Raw Experience Superset Text"):
-                        raw_superset = processed_data["texts"].get("superset", "")
+                        raw_experience = processed_data["texts"].get("experience_superset", "")
                         st.text_area(
                             "Original Experience Superset Text",
-                            raw_superset,
+                            raw_experience,
                             height=200,
                             help="This is the original text extracted directly from the experience superset PDF"
                         )
-                        st.caption(f"Raw superset: {len(raw_superset.split())} words, {len(raw_superset)} characters")
+                        st.caption(f"Raw experience: {len(raw_experience.split())} words, {len(raw_experience)} characters")
                 else:
                     st.warning("No experience superset text was extracted")
                 

@@ -200,7 +200,7 @@ class RAGRetriever:
         
         all_docs = []
         for query in superset_queries:
-            result = self.retrieve_context(query, doc_types=["superset", "experience_summary"])
+            result = self.retrieve_context(query, doc_types=["experience_superset", "skills_superset", "superset", "experience_summary"])
             if result["source_docs"]:
                 all_docs.extend(result["source_docs"])
         
