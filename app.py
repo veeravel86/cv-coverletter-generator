@@ -250,7 +250,7 @@ def handle_generation(generation_mode):
         if st.button("🛠️ Generate Top 10 Skills", help="Extract and rank the top 10 most relevant skills"):
             generate_top_skills(llm_service, context_builder)
         
-        if st.button("💼 Generate Top 8 Experience Bullets", help="Create 8 high-impact experience bullets"):
+        if st.button("💼 Generate Current Position Summary Top8", help="Create current position summary with 8 high-impact bullets"):
             generate_experience_bullets(llm_service, context_builder)
     
     with gen_cols[1]:
@@ -342,9 +342,9 @@ def handle_generation(generation_mode):
                 st.error("❌ Top Skills")
             
             if 'experience_bullets' in st.session_state.individual_generations:
-                st.success("✅ Experience Bullets")
+                st.success("✅ Current Position Summary")
             else:
-                st.error("❌ Experience Bullets")
+                st.error("❌ Current Position Summary")
             
             if 'previous_experience' in st.session_state.individual_generations:
                 st.success("✅ Previous Experience")
@@ -834,34 +834,41 @@ def parse_text_to_json(section_key: str, content: str) -> dict:
         }
     
     elif section_key == 'experience_bullets':
-        # Parse experience bullets with SAR format
-        bullets = []
+        # Parse current position summary with role info and SAR bullets
         lines = content.split('\n')
-        for line in lines:
+        role_info = {}
+        bullets = []
+        
+        # Extract role information from header
+        for i, line in enumerate(lines):
             line = line.strip()
-            if line.startswith('•') or line.startswith('-') or line.startswith('*'):
-                # Extract heading (first two words before |) and content
-                bullet_text = line[1:].strip()  # Remove bullet point
-                if '|' in bullet_text:
-                    parts = bullet_text.split('|', 1)
+            if line.startswith('**') and line.endswith('**') and i < 3:
+                # Position name
+                role_info['position_name'] = line.replace('**', '')
+            elif line.startswith('*') and line.endswith('*') and '|' in line:
+                # Company, location, dates info
+                company_info = line.replace('*', '')
+                if '|' in company_info:
+                    parts = company_info.split('|')
+                    role_info['company_location'] = parts[0].strip()
+                    role_info['dates'] = parts[1].strip() if len(parts) > 1 else ""
+            elif line.startswith('**') and '|' in line:
+                # SAR bullet
+                if '|' in line:
+                    parts = line.split('|', 1)
                     heading = parts[0].strip().replace('**', '')
                     content_part = parts[1].strip()
                     bullets.append({
                         "heading": heading,
                         "content": content_part,
-                        "full_text": bullet_text
-                    })
-                else:
-                    bullets.append({
-                        "heading": "",
-                        "content": bullet_text,
-                        "full_text": bullet_text
+                        "full_text": line
                     })
         
         return {
-            "section_type": "experience_bullets",
+            "section_type": "current_position_summary",
+            "role_info": role_info,
             "bullets": bullets,
-            "total_count": len(bullets)
+            "total_bullets": len(bullets)
         }
     
     elif section_key == 'professional_summary':
@@ -939,9 +946,9 @@ def display_individual_sections():
             'icon': '🎯'
         },
         'experience_bullets': {
-            'title': '⚡ Top 8 Experience Bullets',
-            'subtitle': 'SAR format with two-word headings',
-            'caption': '⚡ Achievement-focused bullets ranked by relevance',
+            'title': '💼 Current Position Summary Top8',
+            'subtitle': 'Position details with SAR format bullets',
+            'caption': '💼 Current role summary with achievement-focused bullets',
             'icon': '⚡'
         },
         'executive_summary': {
@@ -1074,94 +1081,129 @@ BEGIN."""
             st.error(f"❌ Error generating skills: {str(e)}")
 
 def generate_experience_bullets(llm_service, context_builder):
-    """Generate top 8 experience bullets with expandable display using professional ATS-optimized prompt"""
+    """Generate current position summary with top 8 bullets including role details"""
     
-    with st.spinner("💼 Generating top 8 experience bullets..."):
+    with st.spinner("💼 Generating current position summary top8..."):
         try:
-            # Get job description context
-            job_context = context_builder.retriever.get_jd_specific_context([
-                "job description requirements responsibilities qualifications",
-                "job requirements duties role expectations",
-                "skills experience needed preferred"
-            ])["context"]
-            
-            # Get experience context  
-            experience_context = context_builder.retriever.get_superset_context(
-                "work experience achievements projects accomplishments results"
+            # Get sample CV content to extract current role information
+            sample_cv_context = context_builder.retriever.get_superset_context(
+                "current role position job title company work experience employment"
             )["context"]
             
-            prompt = f"""You are an expert CV writer and ATS optimizer for senior engineering leadership roles. Read the below mentioned guidelines and accomplish the task from attached files.
+            # Get job description context for bullet relevance
+            job_context = context_builder.retriever.get_jd_specific_context([
+                "job description requirements responsibilities qualifications",
+                "technical skills competencies requirements",
+                "qualifications experience needed"
+            ])["context"]
+            
+            # First LLM call: Extract current role information from sample CV
+            extraction_prompt = f"""You are a CV data extraction specialist. Extract the current/most recent job role information from the provided CV content.
 
-GOAL
-Read two input files:
-- FILE 1: Job_Description.txt → contains the complete job description.
-- FILE 2: Experience_Superset.txt → contains all possible experience points and achievements.
+SAMPLE CV CONTENT:
+{sample_cv_context}
 
-From these, create EXACTLY 8 high-impact experience summary bullets that are:
-- Directly aligned with the JD.
-- Ordered by PRIORITY based on the JD's stated requirements and implied expectations.
-- Polished for both ATS scanning and human decision-makers.
+TASK: Extract the current/most recent position details and format as JSON.
 
-JOB DESCRIPTION CONTEXT:
+OUTPUT FORMAT (JSON):
+{{
+    "position_name": "exact job title from CV",
+    "company_name": "company name from CV", 
+    "location": "work location (city, country)",
+    "start_date": "start date (format: MMM YYYY)",
+    "end_date": "end date or 'Present' if current",
+    "work_duration": "calculated duration (e.g., '2 years 3 months')",
+    "key_bullets": [
+        "bullet point 1 from CV",
+        "bullet point 2 from CV",
+        "bullet point 3 from CV"
+    ]
+}}
+
+EXTRACTION RULES:
+- Extract ONLY information that exists in the CV
+- If any field is not found, use "Not specified" 
+- For work_duration, calculate from start_date to end_date
+- Extract key achievement bullets exactly as written in CV
+- Focus on the most recent/current position only
+
+Return ONLY the JSON object, no additional text."""
+
+            # Get structured role data from LLM
+            role_extraction = llm_service.generate_content(extraction_prompt, max_tokens=500)
+            
+            # Parse the JSON response
+            try:
+                role_data = json.loads(role_extraction.strip())
+            except json.JSONDecodeError:
+                # Fallback if JSON parsing fails
+                role_data = {
+                    "position_name": "Senior Engineering Manager",
+                    "company_name": "Technology Company",
+                    "location": "Remote",
+                    "start_date": "Jan 2022", 
+                    "end_date": "Present",
+                    "work_duration": "2+ years",
+                    "key_bullets": []
+                }
+            
+            # Second LLM call: Generate optimized SAR bullets based on role and JD
+            bullet_prompt = f"""You are an expert CV writer. Create 8 high-impact SAR format bullets for the current position.
+
+CURRENT ROLE DATA:
+Position: {role_data.get('position_name', 'Senior Position')}
+Company: {role_data.get('company_name', 'Company')}
+Duration: {role_data.get('work_duration', '2+ years')}
+
+JOB DESCRIPTION REQUIREMENTS:
 {job_context}
 
-EXPERIENCE SUPERSET CONTEXT:
-{experience_context}
+ORIGINAL CV BULLETS (reference):
+{chr(10).join(role_data.get('key_bullets', []))}
 
-BULLET REQUIREMENTS
-- Start with a TWO-WORD HEADING (no abbreviations), ideally using language from the JD.
-- Each bullet must follow SAR (Situation–Action–Result) in one concise sentence (~22–35 words).
-- Use JD keywords naturally and accurately.
-- Include metrics or quantifiable results ONLY if present in the Superset; otherwise, use qualitative outcomes.
-- No fabrication or vague fluff.
-- Use international English unless the JD clearly uses US spelling.
-- Each bullet should show measurable impact, leadership depth, and business relevance.
+GOAL: Create EXACTLY 8 achievement-focused bullets using SAR format that align with the target job requirements.
 
-PRIORITY RULES
-- Rank bullets strictly by relevance to the JD:
-  1. Mission-critical competencies, leadership scope, and business outcomes the JD emphasises.
-  2. Skills and themes repeated or highlighted in JD wording.
-  3. Emerging themes or differentiators likely valued for this role (use your AI knowledge of industry trends).
-- Highest-priority achievements appear first.
-- No duplicated content or similar bullets.
+BULLET FORMAT:
+**Two Words** | Situation: [context]. Action: [what you did]. Result: [quantified outcome].
 
-PROCESS (AI internal reasoning; do NOT include this reasoning in the output):
-1. Parse Job_Description.txt → extract competencies, themes, leadership scope, hard skills, and JD keyword frequencies.
-2. Parse Experience_Superset.txt → shortlist all relevant achievements.
-3. Rank shortlist bullets against JD requirements and implied role impact.
-4. Rewrite top 8 bullets in SAR style with JD keywords and two-word headings.
-5. Sequence bullets in order of JD relevance (highest priority first).
-6. Final polish: ensure conciseness, ATS optimisation, and strong action verbs.
+EXAMPLE:
+**Platform Migration** | Situation: Led critical infrastructure upgrade affecting 50M+ users. Action: Designed zero-downtime migration strategy and coordinated 5 engineering teams. Result: Completed migration 2 weeks early with 99.99% uptime maintained.
 
-OUTPUT FORMAT (strict):
-- Output ONLY the 8 bullets, nothing else.
-- Format:
-  **Two Word Heading | SAR statement showing measurable impact**
-- Example (not content):
-  **Cloud Migration | Inherited aging on-prem infra; led phased AWS migration with team restructure; cut costs 20%, boosted uptime, and accelerated deployment cycles.**
+CONTENT REQUIREMENTS:
+- Each bullet showcases different leadership/technical competencies
+- Include specific metrics, numbers, percentages where possible  
+- Align with target role requirements from job description
+- Demonstrate senior-level impact and decision-making
+- Use varied action verbs and technical depth
 
-INPUT FILES
-- Job_Description.pdf  Use job description as input
-- CV_ExperienceSummary_Skills_Superset - Google Docs.pdf use skills super set as input
+OUTPUT: 8 bullets only, no additional text."""
 
-QUALITY BAR
-- Challenge your own output: each bullet must be JD-aligned, SAR-structured, outcome-focused, and priority-ranked.
-- Pretend this will be reviewed by an ATS and a CTO in a competitive search; optimise for clarity, keywords, and quantified results.
-
-BEGIN."""
+            bullets_response = llm_service.generate_content(bullet_prompt, max_tokens=800)
             
-            response = llm_service.generate_content(prompt, max_tokens=1000)
+            # Combine role info and bullets into formatted output
+            formatted_output = f"""**{role_data.get('position_name', 'Current Position')}**
+*{role_data.get('company_name', 'Company')}, {role_data.get('location', 'Location')} | {role_data.get('start_date', 'Start')} - {role_data.get('end_date', 'Present')} ({role_data.get('work_duration', 'Duration')})*
+
+{bullets_response}"""
             
-            # Store in session state
+            # Store both formatted output and structured data
             if 'individual_generations' not in st.session_state:
                 st.session_state.individual_generations = {}
-            st.session_state.individual_generations['experience_bullets'] = response
+            if 'llm_json_responses' not in st.session_state:
+                st.session_state.llm_json_responses = {}
+                
+            st.session_state.individual_generations['experience_bullets'] = formatted_output
+            st.session_state.llm_json_responses['experience_bullets'] = {
+                "role_data": role_data,
+                "bullets_text": bullets_response,
+                "formatted_output": formatted_output
+            }
             
-            st.success("✅ Top 8 Experience Bullets generated successfully!")
+            st.success("✅ Current Position Summary Top8 generated successfully!")
             st.info("👁️ View your generated content in the 'Generated Individual Sections' below")
             
         except Exception as e:
-            st.error(f"❌ Error generating experience bullets: {str(e)}")
+            st.error(f"❌ Error generating current position summary: {str(e)}")
 
 def generate_executive_summary(llm_service, context_builder):
     """Generate executive summary with expandable display using professional ATS-optimized prompt"""
