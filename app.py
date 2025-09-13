@@ -1,6 +1,7 @@
 import os
 import logging
 import traceback
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from exporters.docx_export import get_docx_exporter
 from exporters.pdf_export import get_pdf_exporter
 from utils.text import TextProcessor, ContentValidator
 from utils.style import StyleApplicator
+from models.cv_data import CVData, ContactInfo, RoleExperience, ExperienceBullet
 
 load_dotenv()
 
@@ -39,7 +41,9 @@ def initialize_session_state():
         'validation_results': {},
         'export_paths': {},
         'sample_cv_content': None,
-        'individual_generations': {}
+        'individual_generations': {},
+        'structured_cv_data': None,
+        'llm_json_responses': {}
     }
     
     for key, value in defaults.items():
@@ -807,6 +811,118 @@ If any field is not found in the CV, use "Not found" as the value.
         st.error(f"Error extracting contact information: {str(e)}")
         return None
 
+def parse_text_to_json(section_key: str, content: str) -> dict:
+    """Parse text content to structured JSON format based on section type"""
+    import re
+    
+    if section_key == 'top_skills':
+        # Parse skills from bullet points or numbered lists
+        skills = []
+        lines = content.split('\n')
+        for line in lines:
+            line = line.strip()
+            # Remove bullet points, numbers, and markdown formatting
+            cleaned = re.sub(r'^[\d\.\-\*\•\#\s]+', '', line).strip()
+            cleaned = re.sub(r'\*\*(.*?)\*\*', r'\1', cleaned)  # Remove bold formatting
+            if cleaned and not cleaned.startswith('#'):
+                skills.append(cleaned)
+        
+        return {
+            "section_type": "skills",
+            "skills": skills[:10],  # Top 10 skills
+            "total_count": len(skills)
+        }
+    
+    elif section_key == 'experience_bullets':
+        # Parse experience bullets with SAR format
+        bullets = []
+        lines = content.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line.startswith('•') or line.startswith('-') or line.startswith('*'):
+                # Extract heading (first two words before |) and content
+                bullet_text = line[1:].strip()  # Remove bullet point
+                if '|' in bullet_text:
+                    parts = bullet_text.split('|', 1)
+                    heading = parts[0].strip().replace('**', '')
+                    content_part = parts[1].strip()
+                    bullets.append({
+                        "heading": heading,
+                        "content": content_part,
+                        "full_text": bullet_text
+                    })
+                else:
+                    bullets.append({
+                        "heading": "",
+                        "content": bullet_text,
+                        "full_text": bullet_text
+                    })
+        
+        return {
+            "section_type": "experience_bullets",
+            "bullets": bullets,
+            "total_count": len(bullets)
+        }
+    
+    elif section_key == 'professional_summary':
+        # Parse professional summary
+        lines = [line.strip() for line in content.split('\n') if line.strip()]
+        word_count = len(content.split())
+        
+        return {
+            "section_type": "professional_summary",
+            "summary": content.strip(),
+            "word_count": word_count,
+            "line_count": len(lines)
+        }
+    
+    elif section_key == 'previous_roles':
+        # Parse previous roles and experience
+        roles = []
+        current_role = {}
+        lines = content.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Check if it's a role header (contains company, title, dates)
+            if '|' in line and any(keyword in line.lower() for keyword in ['20', '19', 'present', 'current']):
+                if current_role:
+                    roles.append(current_role)
+                
+                parts = line.split('|')
+                current_role = {
+                    "title": parts[0].strip() if len(parts) > 0 else "",
+                    "company_location": parts[1].strip() if len(parts) > 1 else "",
+                    "dates": parts[2].strip() if len(parts) > 2 else "",
+                    "bullets": []
+                }
+            elif line.startswith('•') or line.startswith('-') or line.startswith('*'):
+                # It's a bullet point
+                bullet_text = line[1:].strip()
+                if current_role:
+                    current_role["bullets"].append(bullet_text)
+        
+        # Add the last role if exists
+        if current_role:
+            roles.append(current_role)
+        
+        return {
+            "section_type": "previous_roles",
+            "roles": roles,
+            "total_roles": len(roles)
+        }
+    
+    # Default fallback
+    return {
+        "section_type": section_key,
+        "raw_content": content,
+        "word_count": len(content.split()),
+        "line_count": len(content.split('\n'))
+    }
+
 def display_individual_sections():
     """Display all generated individual sections in persistent expandable format"""
     
@@ -850,10 +966,30 @@ def display_individual_sections():
                     st.markdown(f"### {config['title']}")
                     st.markdown(f"*{config['subtitle']}*")
                     st.markdown("---")
-                    # Clean content to ensure only headings are bold
-                    cleaned_content = clean_generated_content(content)
-                    st.markdown(cleaned_content)
-                    st.caption(config['caption'])
+                    
+                    # View toggle tabs
+                    tab1, tab2 = st.tabs(["📄 Text View", "🔧 JSON View"])
+                    
+                    with tab1:
+                        # Clean content to ensure only headings are bold
+                        cleaned_content = clean_generated_content(content)
+                        st.markdown(cleaned_content)
+                        st.caption(config['caption'])
+                    
+                    with tab2:
+                        # Show JSON structured data if available
+                        if section_key in st.session_state.llm_json_responses:
+                            json_data = st.session_state.llm_json_responses[section_key]
+                            st.json(json_data)
+                        else:
+                            # Create a structured representation from text content
+                            try:
+                                structured_data = parse_text_to_json(section_key, content)
+                                st.json(structured_data)
+                                st.caption("*Auto-generated JSON structure from text response*")
+                            except Exception as e:
+                                st.warning(f"Could not parse to JSON: {str(e)}")
+                                st.code(content, language="text")
 
 def generate_top_skills(llm_service, context_builder):
     """Generate top 10 skills with expandable display using professional ATS-optimized prompt"""
