@@ -1679,10 +1679,10 @@ def generate_cv_pdf():
                 'previous_experience': ''
             }
         
-        # Try the new structured method, fallback to existing method if not available
+        # Use the new direct method that matches preview CV logic
         try:
-            pdf_path = pdf_exporter.create_structured_cv_pdf(
-                contact_info, individual_sections, color_scheme="teal"
+            pdf_path = pdf_exporter.create_direct_cv_pdf(
+                contact_info, cv_content, color_scheme="teal"
             )
         except AttributeError:
             # Method not available (cache issue), clear cache and try again
@@ -1690,8 +1690,8 @@ def generate_cv_pdf():
             pdf_exporter = get_pdf_exporter()
             
             try:
-                pdf_path = pdf_exporter.create_structured_cv_pdf(
-                    contact_info, individual_sections, color_scheme="teal"
+                pdf_path = pdf_exporter.create_direct_cv_pdf(
+                    contact_info, cv_content, color_scheme="teal"
                 )
             except AttributeError:
                 # Still not available, use fallback method

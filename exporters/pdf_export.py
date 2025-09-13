@@ -906,6 +906,191 @@ class PDFExporter:
         
         return styles
     
+    def create_direct_cv_pdf(self, contact_info: Dict, whole_cv_content: str, color_scheme: str = "teal") -> str:
+        """Create PDF directly from whole CV content without section headers"""
+        try:
+            # Parse the whole CV content into sections
+            sections = self._parse_whole_cv_content(whole_cv_content)
+            
+            # Create filename
+            name = contact_info.get('name', 'CV').replace(' ', '_')
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"Direct_CV_{name}_{timestamp}.pdf"
+            output_path = self.output_dir / filename
+            
+            # Create document
+            doc = SimpleDocTemplate(
+                str(output_path),
+                pagesize=letter,
+                rightMargin=0.75*inch,
+                leftMargin=0.75*inch,
+                topMargin=0.75*inch,
+                bottomMargin=0.75*inch
+            )
+            
+            # Get colors and styles
+            colors = self._get_color_scheme(color_scheme)
+            styles = self._create_structured_styles(colors)
+            
+            # Create story
+            story = []
+            
+            # Contact header
+            contact_header = self._create_contact_header(contact_info, styles['ContactHeader'])
+            story.append(contact_header)
+            story.append(Spacer(1, 0.2*inch))
+            
+            # Process sections directly from parsed content
+            for section_name, content in sections.items():
+                if not content.strip():
+                    continue
+                    
+                if section_name == 'summary':
+                    story.append(Paragraph("<b>PROFESSIONAL SUMMARY</b>", styles['SectionHeading']))
+                    story.append(Spacer(1, 0.1*inch))
+                    story.append(Paragraph(content, styles['SummaryText']))
+                    story.append(Spacer(1, 0.2*inch))
+                    
+                elif section_name == 'skills':
+                    story.append(Paragraph("<b>CORE SKILLS</b>", styles['SectionHeading']))
+                    story.append(Spacer(1, 0.1*inch))
+                    self._add_structured_skills_boxes(story, content, styles, colors)
+                    story.append(Spacer(1, 0.2*inch))
+                    
+                elif section_name == 'experience':
+                    story.append(Paragraph("<b>PROFESSIONAL EXPERIENCE</b>", styles['SectionHeading']))
+                    story.append(Spacer(1, 0.1*inch))
+                    self._add_direct_experience_content(story, content, styles)
+                    story.append(Spacer(1, 0.2*inch))
+            
+            # Build PDF
+            doc.build(story)
+            
+            logger.info(f"Direct CV PDF created successfully: {output_path}")
+            return str(output_path)
+            
+        except Exception as e:
+            logger.error(f"Error creating direct CV PDF: {e}")
+            raise e
+    
+    def _parse_whole_cv_content(self, content: str) -> Dict[str, str]:
+        """Parse whole CV content into sections"""
+        sections = {}
+        lines = content.split('\n')
+        current_section = None
+        current_content = []
+        
+        for line in lines:
+            line = line.strip()
+            
+            # Skip empty lines and separators
+            if not line or line == '---':
+                continue
+            
+            # Detect section headers
+            line_upper = line.upper()
+            if 'PROFESSIONAL SUMMARY' in line_upper or 'SUMMARY' in line_upper:
+                if current_section and current_content:
+                    sections[current_section] = '\n'.join(current_content).strip()
+                current_section = 'summary'
+                current_content = []
+            elif 'CORE SKILLS' in line_upper or 'SKILLS' in line_upper:
+                if current_section and current_content:
+                    sections[current_section] = '\n'.join(current_content).strip()
+                current_section = 'skills'
+                current_content = []
+            elif 'PROFESSIONAL EXPERIENCE' in line_upper or 'EXPERIENCE' in line_upper:
+                if current_section and current_content:
+                    sections[current_section] = '\n'.join(current_content).strip()
+                current_section = 'experience'
+                current_content = []
+            else:
+                # Add content to current section
+                if current_section:
+                    current_content.append(line)
+        
+        # Add the last section
+        if current_section and current_content:
+            sections[current_section] = '\n'.join(current_content).strip()
+        
+        return sections
+    
+    def _add_direct_experience_content(self, story: List, content: str, styles: Dict):
+        """Add experience content directly without additional headers"""
+        lines = content.split('\n')
+        current_role_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Check if this is a job title line (contains company and dates)
+            if '|' in line and any(year in line for year in ['2019', '2020', '2021', '2022', '2023', '2024', '2025']):
+                # Process previous role if exists
+                if current_role_lines:
+                    self._process_role_block(story, current_role_lines, styles)
+                    current_role_lines = []
+                
+                # Start new role
+                current_role_lines = [line]
+            else:
+                # Add to current role
+                current_role_lines.append(line)
+        
+        # Process the last role
+        if current_role_lines:
+            self._process_role_block(story, current_role_lines, styles)
+    
+    def _process_role_block(self, story: List, role_lines: List[str], styles: Dict):
+        """Process a single role block with LinkedIn-style formatting"""
+        if not role_lines:
+            return
+            
+        # First line should be job title with company and dates
+        header_line = role_lines[0]
+        
+        # Parse job title, company, and dates
+        if '|' in header_line:
+            parts = [part.strip() for part in header_line.split('|')]
+            if len(parts) >= 3:
+                job_title = parts[0]
+                company_location = parts[1] 
+                dates = parts[2]
+                
+                # LinkedIn-style header: job title and dates on same line
+                job_header_data = [[
+                    Paragraph(job_title, styles['JobHeader']),
+                    Paragraph(dates, styles['DateText'])
+                ]]
+                
+                job_header_table = Table(job_header_data, colWidths=[4.5*inch, 2*inch])
+                job_header_table.setStyle(TableStyle([
+                    ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                    ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                    ('TOPPADDING', (0, 0), (-1, -1), 0),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ]))
+                
+                story.append(job_header_table)
+                
+                # Company and location
+                if company_location:
+                    story.append(Paragraph(company_location, styles['CompanyText']))
+                
+                story.append(Spacer(1, 0.05*inch))
+        
+        # Add bullet points (skip the first line which is the header)
+        for line in role_lines[1:]:
+            if line.strip() and line.startswith(('•', '-', '*')):
+                # Format bullet with first two words bold
+                formatted_bullet = self._format_bullet_with_bold_start(line, styles)
+                story.append(formatted_bullet)
+                story.append(Spacer(1, 0.03*inch))
+    
     def _clean_text_content(self, content: str) -> str:
         """Clean and format text content for PDF"""
         if not content:
