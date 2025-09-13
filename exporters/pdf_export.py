@@ -1497,6 +1497,124 @@ class PDFExporter:
                     story.append(Paragraph(f"• {clean_bullet}", styles['BulletText']))
                     bullet_count += 1
 
+    def create_cv_from_structured_data(self, cv_data, color_scheme: str = "teal") -> str:
+        """Create CV PDF from CVData structured object"""
+        
+        try:
+            # Import CVData here to avoid circular imports
+            from models.cv_data import CVData
+            
+            if not isinstance(cv_data, CVData):
+                raise ValueError("cv_data must be a CVData instance")
+            
+            # Setup color scheme
+            colors = self._get_color_scheme(color_scheme)
+            
+            # Create output path
+            outputs_dir = Path("outputs")
+            outputs_dir.mkdir(exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"CV_{cv_data.contact.name.replace(' ', '_')}_{timestamp}.pdf"
+            pdf_path = outputs_dir / filename
+            
+            # Create styles
+            styles = self._create_professional_styles(colors)
+            
+            # Create document
+            doc = SimpleDocTemplate(
+                str(pdf_path),
+                pagesize=A4,
+                rightMargin=50,
+                leftMargin=50,
+                topMargin=50,
+                bottomMargin=50
+            )
+            
+            story = []
+            
+            # Add contact header
+            contact_text = cv_data.contact.name
+            if cv_data.contact.email:
+                contact_text += f" | 📧 {cv_data.contact.email}"
+            if cv_data.contact.phone:
+                contact_text += f" | 📞 {cv_data.contact.phone}"
+            if cv_data.contact.location:
+                contact_text += f" | 📍 {cv_data.contact.location}"
+            if cv_data.contact.linkedin:
+                contact_text += f" | 💼 {cv_data.contact.linkedin}"
+            if cv_data.contact.website:
+                contact_text += f" | 🌐 {cv_data.contact.website}"
+            
+            story.append(Paragraph(contact_text, styles['ContactHeader']))
+            story.append(Spacer(1, 15))
+            
+            # Add professional summary
+            if cv_data.professional_summary:
+                story.append(Paragraph("PROFESSIONAL SUMMARY", styles['SectionHeader']))
+                story.append(Spacer(1, 8))
+                story.append(Paragraph(cv_data.professional_summary, styles['BodyText']))
+                story.append(Spacer(1, 15))
+            
+            # Add skills
+            if cv_data.skills:
+                story.append(Paragraph("CORE SKILLS", styles['SectionHeader']))
+                story.append(Spacer(1, 8))
+                
+                # Format skills in rows of 4
+                skills_rows = []
+                for i in range(0, len(cv_data.skills), 4):
+                    row_skills = cv_data.skills[i:i+4]
+                    formatted_row = " | ".join([f"<b>{skill}</b>" for skill in row_skills])
+                    skills_rows.append(formatted_row)
+                
+                for row in skills_rows:
+                    story.append(Paragraph(row, styles['SkillsText']))
+                story.append(Spacer(1, 15))
+            
+            # Add current role
+            if cv_data.current_role:
+                story.append(Paragraph("PROFESSIONAL EXPERIENCE", styles['SectionHeader']))
+                story.append(Spacer(1, 8))
+                
+                # Role header
+                role_header = f"<b>{cv_data.current_role.job_title}</b> | {cv_data.current_role.company}, {cv_data.current_role.location} | {cv_data.current_role.start_date} - {cv_data.current_role.end_date}"
+                story.append(Paragraph(role_header, styles['CompanyHeader']))
+                story.append(Spacer(1, 8))
+                
+                # Add bullets
+                for bullet in cv_data.current_role.bullets:
+                    bullet_text = f"• <b>{bullet.heading}</b>: {bullet.content}"
+                    story.append(Paragraph(bullet_text, styles['BulletText']))
+                
+                story.append(Spacer(1, 15))
+            
+            # Add previous roles
+            for role in cv_data.previous_roles:
+                role_header = f"<b>{role.job_title}</b> | {role.company}, {role.location} | {role.start_date} - {role.end_date}"
+                story.append(Paragraph(role_header, styles['CompanyHeader']))
+                story.append(Spacer(1, 8))
+                
+                for bullet in role.bullets:
+                    bullet_text = f"• <b>{bullet.heading}</b>: {bullet.content}"
+                    story.append(Paragraph(bullet_text, styles['BulletText']))
+                
+                story.append(Spacer(1, 10))
+            
+            # Add additional info
+            if cv_data.additional_info:
+                story.append(Spacer(1, 10))
+                story.append(Paragraph(cv_data.additional_info, styles['BodyText']))
+            
+            # Build PDF
+            doc.build(story)
+            
+            logger.info(f"CVData-based PDF created successfully: {pdf_path}")
+            return str(pdf_path)
+            
+        except Exception as e:
+            logger.error(f"Error creating PDF from CVData: {e}")
+            raise
+
 @st.cache_resource
 def get_pdf_exporter():
     return PDFExporter()

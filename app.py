@@ -359,14 +359,14 @@ def handle_generation(generation_mode):
         
         with generate_whole_cv_cols[1]:
             if 'whole_cv_content' in st.session_state and st.session_state.whole_cv_content:
-                if st.button("👁️ Preview CV", help="Preview the complete CV before download"):
-                    show_cv_preview()
+                if st.button("👁️ Preview CV", help="Preview the complete CV using structured data format"):
+                    show_cv_preview_structured()
         
         with generate_whole_cv_cols[2]:
             if 'whole_cv_content' in st.session_state and st.session_state.whole_cv_content:
                 if st.button("📄 Generate PDF", type="secondary", help="Generate CV as PDF for download"):
                     with st.spinner("📄 Generating PDF..."):
-                        pdf_data = generate_cv_pdf()
+                        pdf_data = generate_cv_pdf_structured()
                         if pdf_data:
                             st.session_state['pdf_data'] = pdf_data
                             st.session_state['pdf_name'] = f"CV_{st.session_state.whole_cv_contact.get('name', 'Document').replace(' ', '_')}.pdf"
@@ -2003,6 +2003,236 @@ def validate_cv_structure(cv_content):
         'issues': issues,
         'sections_found': sections_found
     }
+
+def convert_session_to_cvdata() -> CVData:
+    """Convert session state data to structured CVData format"""
+    from datetime import datetime
+    import json
+    
+    # Get contact information
+    contact_data = st.session_state.get('whole_cv_contact', {})
+    contact = ContactInfo(
+        name=contact_data.get('name', ''),
+        email=contact_data.get('email', ''),
+        phone=contact_data.get('phone', ''),
+        location=contact_data.get('location', ''),
+        linkedin=contact_data.get('linkedin'),
+        website=contact_data.get('website')
+    )
+    
+    # Get individual sections
+    individual_sections = st.session_state.get('individual_generations', {})
+    llm_json_responses = st.session_state.get('llm_json_responses', {})
+    
+    # Extract professional summary
+    professional_summary = individual_sections.get('executive_summary', '')
+    if professional_summary:
+        # Clean summary and limit to 40 words
+        words = professional_summary.split()
+        if len(words) > 40:
+            professional_summary = ' '.join(words[:40])
+    
+    # Extract skills from top_skills section
+    skills = []
+    top_skills = individual_sections.get('top_skills', '')
+    if top_skills:
+        skills = extract_skills_list(top_skills)
+    if len(skills) > 10:
+        skills = skills[:10]  # Limit to max 10 skills
+    
+    # Extract current role from experience_bullets JSON data
+    current_role = None
+    experience_json = llm_json_responses.get('experience_bullets')
+    
+    if experience_json:
+        try:
+            # Parse the JSON response to get structured role data
+            if isinstance(experience_json, str):
+                role_data = json.loads(experience_json)
+            else:
+                role_data = experience_json
+            
+            # Create bullets from JSON data
+            bullets = []
+            for bullet_text in role_data.get('key_bullets', [])[:8]:  # Max 8 bullets
+                if ':' in bullet_text:
+                    heading = bullet_text.split(':', 1)[0].strip().replace('**', '')
+                    content = bullet_text.split(':', 1)[1].strip()
+                    # Take first two words as heading
+                    heading_words = heading.split()[:2]
+                    heading = ' '.join(heading_words)
+                    bullets.append(ExperienceBullet(heading=heading, content=content))
+                else:
+                    # Use first two words as heading
+                    words = bullet_text.strip().split()
+                    if len(words) >= 2:
+                        heading = ' '.join(words[:2])
+                        content = ' '.join(words[2:])
+                        bullets.append(ExperienceBullet(heading=heading, content=content))
+            
+            current_role = RoleExperience(
+                job_title=role_data.get('position_name', 'Current Position'),
+                company=role_data.get('company_name', 'Company'),
+                location=role_data.get('location', 'Location'),
+                start_date=role_data.get('start_date', 'Present'),
+                end_date=role_data.get('end_date', 'Present'),
+                bullets=bullets
+            )
+        except (json.JSONDecodeError, KeyError, AttributeError) as e:
+            logger.warning(f"Could not parse experience_bullets JSON: {e}")
+            # Fallback: create basic current role from text
+            experience_text = individual_sections.get('experience_bullets', '')
+            bullets = []
+            if experience_text:
+                lines = [line.strip() for line in experience_text.split('\n') if line.strip() and ('•' in line or ':' in line)]
+                for line in lines[:8]:
+                    clean_line = line.replace('•', '').strip()
+                    if ':' in clean_line:
+                        heading = clean_line.split(':', 1)[0].strip().replace('**', '')
+                        content = clean_line.split(':', 1)[1].strip()
+                        heading_words = heading.split()[:2]
+                        heading = ' '.join(heading_words)
+                        bullets.append(ExperienceBullet(heading=heading, content=content))
+            
+            current_role = RoleExperience(
+                job_title='Current Position',
+                company='Company',
+                location='Location',
+                start_date='Present',
+                end_date='Present',
+                bullets=bullets
+            )
+    
+    if not current_role:
+        # Create empty current role if none exists
+        current_role = RoleExperience(
+            job_title='Position Title',
+            company='Company Name',
+            location='City, Country',
+            start_date='MMM YYYY',
+            end_date='Present',
+            bullets=[]
+        )
+    
+    # Extract previous roles from previous_experience section
+    previous_roles = []
+    previous_experience_text = individual_sections.get('previous_experience', '')
+    
+    if previous_experience_text:
+        # Parse previous experience text to extract role information
+        # This would need more sophisticated parsing, for now create a basic structure
+        previous_roles = []  # TODO: Implement parsing of previous roles
+    
+    # Get additional info
+    additional_info = None
+    
+    # Create CVData structure
+    cv_data = CVData(
+        contact=contact,
+        professional_summary=professional_summary,
+        skills=skills,
+        current_role=current_role,
+        previous_roles=previous_roles,
+        additional_info=additional_info,
+        generated_at=datetime.now().isoformat()
+    )
+    
+    return cv_data
+
+def show_cv_preview_structured():
+    """Display CV preview using structured CVData format"""
+    
+    # Check if we have sufficient data
+    if not st.session_state.get('whole_cv_contact') or not st.session_state.get('individual_generations'):
+        st.warning("⚠️ No CV content available for preview. Please generate individual sections first.")
+        return
+    
+    try:
+        # Convert session data to structured format
+        cv_data = convert_session_to_cvdata()
+        
+        with st.expander("👁️ Complete CV Preview (Structured) - Click to expand", expanded=True):
+            st.markdown("### 📄 Generated CV Preview")
+            st.markdown("*Review your complete CV using structured data format*")
+            st.markdown("---")
+            
+            # Display using the CVData format_for_preview method
+            formatted_cv = cv_data.format_for_preview()
+            st.markdown(formatted_cv)
+            
+            st.markdown("---")
+            st.caption("🎯 Professional CV preview using structured data")
+            
+            # Add JSON view toggle
+            with st.expander("🔍 View Structured Data (JSON)", expanded=False):
+                st.json(cv_data.to_dict())
+                
+    except Exception as e:
+        logger.error(f"Error in structured CV preview: {e}")
+        st.error(f"❌ Error generating structured preview: {str(e)}")
+        # Fallback to original preview
+        show_cv_preview()
+
+def generate_cv_pdf_structured():
+    """Generate CV PDF using structured CVData format"""
+    try:
+        # Check if we have sufficient data
+        if not st.session_state.get('whole_cv_contact') or not st.session_state.get('individual_generations'):
+            st.error("❌ No CV content available. Please generate individual sections first.")
+            return None
+        
+        # Convert to structured format
+        cv_data = convert_session_to_cvdata()
+        
+        # Validate the structured data
+        if not cv_data.contact.name or not cv_data.contact.email:
+            st.error("❌ Missing essential contact information (name/email). Please check your contact details.")
+            return None
+        
+        # Get PDF exporter
+        pdf_exporter = get_pdf_exporter()
+        
+        # Check if the exporter has a method for structured data
+        if hasattr(pdf_exporter, 'create_cv_from_structured_data'):
+            # Use structured data method if available
+            pdf_path = pdf_exporter.create_cv_from_structured_data(cv_data, color_scheme="teal")
+        else:
+            # Fallback: convert structured data to formatted text and use existing method
+            formatted_content = cv_data.format_for_preview()
+            contact_dict = cv_data.contact.to_dict()
+            
+            try:
+                pdf_path = pdf_exporter.create_direct_cv_pdf(
+                    contact_dict, formatted_content, color_scheme="teal"
+                )
+            except AttributeError:
+                # Use fallback method
+                pdf_path = pdf_exporter.create_professional_cv_pdf(
+                    formatted_content, contact_dict, color_scheme="teal"
+                )
+        
+        # Validate PDF was created
+        if not os.path.exists(pdf_path):
+            raise Exception("PDF file was not created")
+        
+        file_size = os.path.getsize(pdf_path)
+        if file_size < 1000:  # PDF should be at least 1KB
+            raise Exception(f"PDF file is too small ({file_size} bytes), likely empty")
+        
+        # Read and return PDF data
+        with open(pdf_path, "rb") as file:
+            pdf_data = file.read()
+            
+            if len(pdf_data) < 1000:
+                raise Exception("PDF data is too small, likely corrupted or empty")
+            
+            return pdf_data
+            
+    except Exception as e:
+        logger.error(f"Structured PDF generation error: {e}")
+        st.error(f"❌ Error generating structured PDF: {str(e)}")
+        # Fallback to original method
+        return generate_cv_pdf()
 
 if __name__ == "__main__":
     main()
