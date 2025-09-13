@@ -89,7 +89,14 @@ CRITICAL RULES:
 - No filler words or vague adjectives
 - Integrate job description keywords naturally
 - Demonstrate leadership scale and business outcomes
-- ATS-optimized for senior leadership roles"""
+- ATS-optimized for senior leadership roles
+
+ANTI-HALLUCINATION GUARD RAILS:
+- Use ONLY information directly provided in the candidate background
+- Do NOT invent specific percentages, numbers, or metrics not mentioned in the source material
+- Do NOT create fictional achievements or outcomes
+- Keep all claims factually grounded in the provided context
+- If no specific metrics are provided, use qualitative descriptors instead"""
     
     def _create_summary_user_prompt(self, job_description: str, candidate_background: str) -> str:
         return f"""ANALYZE the job description and candidate background to generate ONE executive professional summary.
@@ -108,6 +115,12 @@ REQUIREMENTS:
 - No first-person pronouns (I, my, me)
 - No vague adjectives or filler words
 - Demonstrate measurable scope and strategic alignment
+
+IMPORTANT - FACTUAL ACCURACY:
+- Use ONLY facts and achievements explicitly stated in the candidate background
+- Do NOT invent percentages, dollar amounts, or specific metrics not provided
+- If quantitative data isn't available, focus on qualitative achievements and scope
+- Keep all statements truthful and verifiable from the source material
 
 PRIORITY ELEMENTS:
 1. Core leadership and technology competencies from JD

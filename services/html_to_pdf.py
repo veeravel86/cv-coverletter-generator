@@ -139,7 +139,7 @@ class HTMLToPDFConverter:
         .cv-container {
             max-width: 8.5in;
             margin: 0 auto;
-            padding: 0.75in;
+            padding: 0.4in;
             background: white;
         }
         
@@ -160,6 +160,9 @@ class HTMLToPDFConverter:
             margin-bottom: 16pt;
             color: #555;
             font-size: 10pt;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         
         .contact-info span {
@@ -201,18 +204,21 @@ class HTMLToPDFConverter:
         .core-skills {
             display: flex;
             flex-wrap: wrap;
-            gap: 8pt;
+            gap: 4pt;
             margin-bottom: 16pt;
+            line-height: 1.2;
         }
         
         .skill-tag {
-            background: #3498db;
-            color: white;
-            padding: 4pt 8pt;
-            border-radius: 12pt;
-            font-size: 9pt;
+            background: #ecf0f1;
+            color: #2c3e50;
+            padding: 2pt 6pt;
+            border-radius: 8pt;
+            font-size: 7.5pt;
             font-weight: bold;
             display: inline-block;
+            border: 1px solid #bdc3c7;
+            box-shadow: 0 1pt 2pt rgba(0,0,0,0.1);
         }
         
         /* Experience Section */
@@ -300,7 +306,7 @@ class HTMLToPDFConverter:
         @media print {
             .cv-container {
                 margin: 0;
-                padding: 0.5in;
+                padding: 0.3in;
                 box-shadow: none;
             }
             

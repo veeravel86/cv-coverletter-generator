@@ -12,7 +12,7 @@
 
 ## **CORE SKILLS**
 
-{% for skill in skills %}**{{ skill }}**{% if not loop.last %} | {% endif %}{% endfor %}
+<div class="core-skills">{% for skill in skills %}<span class="skill-tag">{{ skill }}</span>{% endfor %}</div>
 
 ---
 

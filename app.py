@@ -1197,6 +1197,13 @@ CONTENT REQUIREMENTS:
 - Demonstrate senior-level impact and decision-making
 - Use varied action verbs and technical depth
 
+ANTI-HALLUCINATION GUARD RAILS:
+- Base ALL achievements and metrics on information provided in ORIGINAL CV BULLETS
+- Do NOT invent specific percentages, dollar amounts, or metrics not in the source material
+- Do NOT create fictional team sizes, project timelines, or performance improvements
+- If quantitative data isn't available, use qualitative achievements and scope descriptors
+- Keep all claims factually grounded in the provided role context and original bullets
+
 OUTPUT FORMAT (JSON):
 {{
     "optimized_bullets": [
