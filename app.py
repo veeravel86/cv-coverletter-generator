@@ -1107,24 +1107,32 @@ TASK: Extract the current/most recent position details and format as JSON.
 
 OUTPUT FORMAT (JSON):
 {{
-    "position_name": "exact job title from CV",
-    "company_name": "company name from CV", 
-    "location": "work location (city, country)",
-    "start_date": "start date (format: MMM YYYY)",
-    "end_date": "end date or 'Present' if current",
-    "work_duration": "calculated duration (e.g., '2 years 3 months')",
-    "key_bullets": [
-        "bullet point 1 from CV",
-        "bullet point 2 from CV",
-        "bullet point 3 from CV"
-    ]
+    "role_data": {{
+        "position_name": "exact job title from CV",
+        "company_name": "company name from CV", 
+        "location": "work location (city, country)",
+        "start_date": "start date (format: MMM YYYY)",
+        "end_date": "end date or 'Present' if current",
+        "work_duration": "calculated duration (e.g., '2 years 3 months')",
+        "key_bullets": [
+            "bullet point 1 from CV",
+            "bullet point 2 from CV",
+            "bullet point 3 from CV",
+            "bullet point 4 from CV",
+            "bullet point 5 from CV",
+            "bullet point 6 from CV",
+            "bullet point 7 from CV",
+            "bullet point 8 from CV"
+        ]
+    }}
 }}
 
 EXTRACTION RULES:
 - Extract ONLY information that exists in the CV
 - If any field is not found, use "Not specified" 
 - For work_duration, calculate from start_date to end_date
-- Extract key achievement bullets exactly as written in CV
+- Extract key achievement bullets exactly as written in CV (each as separate array item)
+- Include up to 8 bullet points, each as a separate row in key_bullets array
 - Focus on the most recent/current position only
 
 Return ONLY the JSON object, no additional text."""
@@ -1134,7 +1142,8 @@ Return ONLY the JSON object, no additional text."""
             
             # Parse the JSON response
             try:
-                role_data = json.loads(role_extraction.strip())
+                extracted_data = json.loads(role_extraction.strip())
+                role_data = extracted_data.get('role_data', extracted_data)  # Handle both formats
             except json.JSONDecodeError:
                 # Fallback if JSON parsing fails
                 role_data = {
@@ -1147,7 +1156,7 @@ Return ONLY the JSON object, no additional text."""
                     "key_bullets": []
                 }
             
-            # Second LLM call: Generate optimized SAR bullets based on role and JD
+            # Second LLM call: Generate optimized SAR bullets as JSON array
             bullet_prompt = f"""You are an expert CV writer. Create 8 high-impact SAR format bullets for the current position.
 
 CURRENT ROLE DATA:
@@ -1176,15 +1185,40 @@ CONTENT REQUIREMENTS:
 - Demonstrate senior-level impact and decision-making
 - Use varied action verbs and technical depth
 
-OUTPUT: 8 bullets only, no additional text."""
+OUTPUT FORMAT (JSON):
+{{
+    "optimized_bullets": [
+        "**First Bullet** | SAR format bullet 1",
+        "**Second Bullet** | SAR format bullet 2",
+        "**Third Bullet** | SAR format bullet 3",
+        "**Fourth Bullet** | SAR format bullet 4",
+        "**Fifth Bullet** | SAR format bullet 5",
+        "**Sixth Bullet** | SAR format bullet 6",
+        "**Seventh Bullet** | SAR format bullet 7",
+        "**Eighth Bullet** | SAR format bullet 8"
+    ]
+}}
+
+Return ONLY the JSON object with exactly 8 bullets, no additional text."""
 
             bullets_response = llm_service.generate_content(bullet_prompt, max_tokens=800)
+            
+            # Parse the bullets JSON response
+            try:
+                bullets_data = json.loads(bullets_response.strip())
+                optimized_bullets = bullets_data.get('optimized_bullets', [])
+            except json.JSONDecodeError:
+                # Fallback: treat as plain text and split by lines
+                optimized_bullets = [line.strip() for line in bullets_response.strip().split('\n') if line.strip()]
+            
+            # Format bullets for display
+            formatted_bullets = '\n'.join([f"• {bullet}" for bullet in optimized_bullets])
             
             # Combine role info and bullets into formatted output
             formatted_output = f"""**{role_data.get('position_name', 'Current Position')}**
 *{role_data.get('company_name', 'Company')}, {role_data.get('location', 'Location')} | {role_data.get('start_date', 'Start')} - {role_data.get('end_date', 'Present')} ({role_data.get('work_duration', 'Duration')})*
 
-{bullets_response}"""
+{formatted_bullets}"""
             
             # Store both formatted output and structured data
             if 'individual_generations' not in st.session_state:
@@ -1195,6 +1229,7 @@ OUTPUT: 8 bullets only, no additional text."""
             st.session_state.individual_generations['experience_bullets'] = formatted_output
             st.session_state.llm_json_responses['experience_bullets'] = {
                 "role_data": role_data,
+                "optimized_bullets": optimized_bullets,
                 "bullets_text": bullets_response,
                 "formatted_output": formatted_output
             }
@@ -2046,17 +2081,25 @@ def convert_session_to_cvdata() -> CVData:
     
     if experience_json:
         try:
-            # Parse the JSON response to get structured role data
-            if isinstance(experience_json, str):
-                role_data = json.loads(experience_json)
-            else:
-                role_data = experience_json
+            # Get structured data from the new format
+            role_data = experience_json.get('role_data', {})
+            optimized_bullets = experience_json.get('optimized_bullets', [])
             
-            # Create bullets from JSON data
+            # Create bullets from optimized JSON data  
             bullets = []
-            for bullet_text in role_data.get('key_bullets', [])[:8]:  # Max 8 bullets
-                if ':' in bullet_text:
-                    heading = bullet_text.split(':', 1)[0].strip().replace('**', '')
+            for bullet_text in optimized_bullets[:8]:  # Max 8 bullets
+                if '|' in bullet_text:
+                    # Handle SAR format: **Heading** | Content
+                    parts = bullet_text.split('|', 1)
+                    heading = parts[0].strip().replace('**', '').replace('•', '').strip()
+                    content = parts[1].strip() if len(parts) > 1 else bullet_text
+                    # Take first two words as heading
+                    heading_words = heading.split()[:2]
+                    heading = ' '.join(heading_words)
+                    bullets.append(ExperienceBullet(heading=heading, content=content))
+                elif ':' in bullet_text:
+                    # Handle colon format: **Heading**: Content
+                    heading = bullet_text.split(':', 1)[0].strip().replace('**', '').replace('•', '').strip()
                     content = bullet_text.split(':', 1)[1].strip()
                     # Take first two words as heading
                     heading_words = heading.split()[:2]
@@ -2064,11 +2107,14 @@ def convert_session_to_cvdata() -> CVData:
                     bullets.append(ExperienceBullet(heading=heading, content=content))
                 else:
                     # Use first two words as heading
-                    words = bullet_text.strip().split()
+                    clean_text = bullet_text.replace('•', '').replace('**', '').strip()
+                    words = clean_text.split()
                     if len(words) >= 2:
                         heading = ' '.join(words[:2])
-                        content = ' '.join(words[2:])
+                        content = ' '.join(words[2:]) if len(words) > 2 else bullet_text
                         bullets.append(ExperienceBullet(heading=heading, content=content))
+                    else:
+                        bullets.append(ExperienceBullet(heading="Action", content=bullet_text))
             
             current_role = RoleExperience(
                 job_title=role_data.get('position_name', 'Current Position'),
