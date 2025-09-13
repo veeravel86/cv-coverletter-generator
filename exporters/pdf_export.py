@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 class PDFExporter:
     def __init__(self):
         self.styles = getSampleStyleSheet()
+        self.output_dir = Path("outputs")
+        self.output_dir.mkdir(exist_ok=True)
         self._setup_custom_styles()
         
     def _setup_custom_styles(self):
