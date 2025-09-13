@@ -384,12 +384,14 @@ def handle_generation(generation_mode):
                 generate_whole_cv(llm_service, context_builder, name, email, phone, location, linkedin, website)
         
         with generate_whole_cv_cols[1]:
-            if 'whole_cv_content' in st.session_state and st.session_state.whole_cv_content:
+            # Remove dependency on whole_cv_content for template-based preview
+            if st.session_state.get('whole_cv_contact') and st.session_state.get('individual_generations'):
                 if st.button("👁️ Preview CV", help="Preview the complete CV using structured data format"):
                     show_cv_preview_structured()
         
         with generate_whole_cv_cols[2]:
-            if 'whole_cv_content' in st.session_state and st.session_state.whole_cv_content:
+            # Remove dependency on whole_cv_content for template-based PDF generation
+            if st.session_state.get('whole_cv_contact') and st.session_state.get('individual_generations'):
                 if st.button("📄 Generate PDF", type="secondary", help="Generate CV as PDF for download"):
                     with st.spinner("📄 Generating PDF..."):
                         pdf_data = generate_cv_pdf_structured()
@@ -1991,38 +1993,52 @@ def assemble_complete_cv(contact, summary, skills, current_exp, previous_exp, ad
     return "\n\n---\n\n".join([section for section in cv_sections if section.strip()])
 
 def show_cv_preview():
-    """Display CV preview in expandable modal"""
+    """Display CV preview using template engine for consistent formatting"""
     
-    if 'whole_cv_content' not in st.session_state or not st.session_state.whole_cv_content:
-        st.warning("⚠️ No CV content available for preview")
+    # Check if we have the necessary data for template engine
+    if ('individual_generations' not in st.session_state or 
+        'whole_cv_contact' not in st.session_state):
+        st.warning("⚠️ No CV data available for preview")
         return
     
-    # Show CV preview with toggle for expanded view  
-    expanded_view = st.checkbox("📖 Show full-width CV preview", value=False, help="Check to see CV preview in full page width")
-    
-    if expanded_view:
-        # Full width preview
-        st.markdown("### 📄 Generated CV Preview (Full Width)")
-        st.markdown("*Review your complete CV before downloading as PDF*")
-        st.markdown("---")
+    try:
+        # Use template engine to generate consistent preview content
+        cv_data = convert_session_to_cvdata()
+        preview_content = template_engine.render_cv_preview(cv_data)
         
-        # Display the complete CV content
-        st.markdown(st.session_state.whole_cv_content)
+        # Show CV preview with toggle for expanded view  
+        expanded_view = st.checkbox("📖 Show full-width CV preview", value=False, help="Check to see CV preview in full page width")
         
-        st.markdown("---")
-        st.caption("🎯 Professional CV preview")
-    else:
-        # Compact expander view  
-        with st.expander("👁️ Complete CV Preview - Click to expand", expanded=True):
-            st.markdown("### 📄 Generated CV Preview")
+        if expanded_view:
+            # Full width preview
+            st.markdown("### 📄 Generated CV Preview (Full Width)")
             st.markdown("*Review your complete CV before downloading as PDF*")
             st.markdown("---")
             
-            # Display the complete CV content
-            st.markdown(st.session_state.whole_cv_content)
+            # Display the template-generated content
+            st.markdown(preview_content)
             
             st.markdown("---")
             st.caption("🎯 Professional CV preview")
+        else:
+            # Compact expander view  
+            with st.expander("👁️ Complete CV Preview - Click to expand", expanded=True):
+                st.markdown("### 📄 Generated CV Preview")
+                st.markdown("*Review your complete CV before downloading as PDF*")
+                st.markdown("---")
+                
+                # Display the template-generated content
+                st.markdown(preview_content)
+                
+                st.markdown("---")
+                st.caption("🎯 Professional CV preview")
+                
+    except Exception as e:
+        st.error(f"❌ Error generating CV preview: {str(e)}")
+        # Fallback to old content if available
+        if 'whole_cv_content' in st.session_state and st.session_state.whole_cv_content:
+            st.warning("⚠️ Using fallback content format")
+            st.markdown(st.session_state.whole_cv_content)
 
 def generate_cv_pdf():
     """Generate CV as PDF and return the PDF data"""
@@ -2497,8 +2513,8 @@ def show_cv_preview_structured():
     except Exception as e:
         logger.error(f"Error in templated CV preview: {e}")
         st.error(f"❌ Error generating templated preview: {str(e)}")
-        # Fallback to original preview
-        show_cv_preview()
+        # Fallback to simple error message instead of broken old system
+        st.error("❌ Unable to generate CV preview. Please ensure all sections are generated first.")
 
 def generate_cv_pdf_structured():
     """Generate CV PDF using template engine and structured CVData format"""

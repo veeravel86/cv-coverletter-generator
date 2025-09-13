@@ -349,6 +349,220 @@ class TestTemplateConsistency(unittest.TestCase):
         except Exception as e:
             self.fail(f"Integration test failed: {e}")
 
+    def test_mandatory_sections_have_substantial_data(self):
+        """Test that all mandatory sections contain substantial data, not just headers"""
+        preview_content = template_engine.render_cv_preview(self.sample_cv_data)
+        pdf_content = template_engine.render_cv_for_pdf(self.sample_cv_data)
+        
+        # Professional Summary must have meaningful content (min 20 chars)
+        self.assertGreater(len(self.sample_cv_data.professional_summary.strip()), 20,
+                          "Professional Summary should have substantial content")
+        self.assertIn(self.sample_cv_data.professional_summary, preview_content)
+        self.assertIn(self.sample_cv_data.professional_summary, pdf_content)
+        
+        # Core Skills must have multiple skills (min 3)
+        self.assertGreaterEqual(len(self.sample_cv_data.skills), 3, 
+                               "Should have at least 3 skills")
+        skills_in_preview = sum(1 for skill in self.sample_cv_data.skills if skill in preview_content)
+        skills_in_pdf = sum(1 for skill in self.sample_cv_data.skills if skill in pdf_content)
+        self.assertGreaterEqual(skills_in_preview, 3, "Preview should contain at least 3 skills")
+        self.assertGreaterEqual(skills_in_pdf, 3, "PDF should contain at least 3 skills")
+        
+        # Current role must have meaningful bullets (min 2)
+        self.assertGreaterEqual(len(self.sample_cv_data.current_role.bullets), 2,
+                               "Current role should have at least 2 bullets")
+        for bullet in self.sample_cv_data.current_role.bullets:
+            self.assertGreater(len(bullet.content.strip()), 10, 
+                             f"Bullet content should be substantial: {bullet.content}")
+            self.assertIn(bullet.content, preview_content)
+            self.assertIn(bullet.content, pdf_content)
+        
+        # Contact info must be complete
+        contact = self.sample_cv_data.contact
+        required_contact_fields = [contact.name, contact.email, contact.phone, contact.location]
+        for field in required_contact_fields:
+            self.assertTrue(field and len(field.strip()) > 0, f"Contact field should not be empty: {field}")
+            self.assertIn(field, preview_content)
+            self.assertIn(field, pdf_content)
+
+    def test_content_quality_and_consistency_comprehensive(self):
+        """Comprehensive test for content quality and consistency between formats"""
+        preview_content = template_engine.render_cv_preview(self.sample_cv_data)
+        pdf_content = template_engine.render_cv_for_pdf(self.sample_cv_data)
+        
+        # Test content quality metrics
+        quality_checks = {
+            'preview_min_length': len(preview_content) >= 500,  # Minimum meaningful CV length
+            'pdf_min_length': len(pdf_content) >= 500,
+            'has_professional_summary': 'PROFESSIONAL SUMMARY' in preview_content and 'PROFESSIONAL SUMMARY' in pdf_content,
+            'has_core_skills': 'CORE SKILLS' in preview_content and 'CORE SKILLS' in pdf_content,
+            'has_professional_experience': 'PROFESSIONAL EXPERIENCE' in preview_content and 'PROFESSIONAL EXPERIENCE' in pdf_content,
+            'contact_complete': all(field in preview_content and field in pdf_content 
+                                  for field in [self.sample_cv_data.contact.name, 
+                                              self.sample_cv_data.contact.email,
+                                              self.sample_cv_data.contact.phone]),
+        }
+        
+        failed_checks = [check for check, passed in quality_checks.items() if not passed]
+        self.assertEqual([], failed_checks, f"Quality checks failed: {failed_checks}")
+        
+        # Test content consistency - key phrases should appear in both formats
+        key_phrases = [
+            self.sample_cv_data.contact.name,
+            self.sample_cv_data.current_role.job_title,
+            self.sample_cv_data.current_role.company,
+            'PROFESSIONAL SUMMARY',
+            'CORE SKILLS',
+            'PROFESSIONAL EXPERIENCE'
+        ]
+        
+        for phrase in key_phrases:
+            self.assertIn(phrase, preview_content, f"Key phrase missing from preview: {phrase}")
+            self.assertIn(phrase, pdf_content, f"Key phrase missing from PDF: {phrase}")
+            
+        # Test that substantial content exists in both formats
+        import re
+        # Remove headers and formatting to compare actual content
+        preview_clean = re.sub(r'[#*=|\-]+', '', preview_content)
+        pdf_clean = re.sub(r'[#*=|\-]+', '', pdf_content)
+        
+        # Count meaningful words (exclude common formatting words)
+        preview_words = len([w for w in preview_clean.split() if len(w) > 2])
+        pdf_words = len([w for w in pdf_clean.split() if len(w) > 2])
+        
+        self.assertGreater(preview_words, 50, "Preview should have substantial word content")
+        self.assertGreater(pdf_words, 50, "PDF should have substantial word content")
+        
+        # Content overlap should be high (similar word count indicates similar content)
+        word_count_ratio = min(preview_words, pdf_words) / max(preview_words, pdf_words)
+        self.assertGreater(word_count_ratio, 0.8, 
+                          f"Content word count should be similar (ratio: {word_count_ratio:.2f})")
+
+    def test_previous_roles_content_quality(self):
+        """Test that previous roles have substantial content in both formats"""
+        preview_content = template_engine.render_cv_preview(self.sample_cv_data)
+        pdf_content = template_engine.render_cv_for_pdf(self.sample_cv_data)
+        
+        self.assertGreater(len(self.sample_cv_data.previous_roles), 0, 
+                          "Should have at least one previous role for comprehensive testing")
+        
+        for i, role in enumerate(self.sample_cv_data.previous_roles):
+            # Each role should have substantial info
+            self.assertTrue(role.job_title and len(role.job_title.strip()) > 0,
+                           f"Previous role {i} should have job title")
+            self.assertTrue(role.company and len(role.company.strip()) > 0,
+                           f"Previous role {i} should have company")
+            self.assertGreater(len(role.bullets), 0,
+                             f"Previous role {i} should have bullets")
+            
+            # Content should appear in both formats
+            self.assertIn(role.job_title, preview_content,
+                         f"Previous role {i} title missing from preview")
+            self.assertIn(role.job_title, pdf_content,
+                         f"Previous role {i} title missing from PDF")
+            self.assertIn(role.company, preview_content,
+                         f"Previous role {i} company missing from preview")
+            self.assertIn(role.company, pdf_content,
+                         f"Previous role {i} company missing from PDF")
+            
+            # Bullets should have meaningful content
+            for j, bullet in enumerate(role.bullets):
+                self.assertGreater(len(bullet.content.strip()), 10,
+                                 f"Previous role {i} bullet {j} should have substantial content")
+                self.assertIn(bullet.content, preview_content,
+                             f"Previous role {i} bullet {j} missing from preview")
+                self.assertIn(bullet.content, pdf_content,
+                             f"Previous role {i} bullet {j} missing from PDF")
+
+    def test_formatting_consistency_detailed(self):
+        """Test detailed formatting consistency between preview and PDF"""
+        preview_content = template_engine.render_cv_preview(self.sample_cv_data)
+        pdf_content = template_engine.render_cv_for_pdf(self.sample_cv_data)
+        
+        # Both should have proper section structure
+        section_headers = ['PROFESSIONAL SUMMARY', 'CORE SKILLS', 'PROFESSIONAL EXPERIENCE']
+        
+        for header in section_headers:
+            # Headers should exist in both
+            self.assertIn(header, preview_content, f"Header '{header}' missing from preview")
+            self.assertIn(header, pdf_content, f"Header '{header}' missing from PDF")
+            
+            # Extract section content (everything after header until next header or end)
+            import re
+            pattern = rf'{re.escape(header)}(.*?)(?=(?:PROFESSIONAL SUMMARY|CORE SKILLS|PROFESSIONAL EXPERIENCE|$))'
+            
+            preview_section = re.search(pattern, preview_content, re.DOTALL | re.IGNORECASE)
+            pdf_section = re.search(pattern, pdf_content, re.DOTALL | re.IGNORECASE)
+            
+            self.assertIsNotNone(preview_section, f"Could not extract '{header}' section from preview")
+            self.assertIsNotNone(pdf_section, f"Could not extract '{header}' section from PDF")
+            
+            # Sections should have substantial content (not just headers)
+            preview_section_content = preview_section.group(1).strip()
+            pdf_section_content = pdf_section.group(1).strip()
+            
+            self.assertGreater(len(preview_section_content), 10,
+                             f"Preview '{header}' section should have substantial content")
+            self.assertGreater(len(pdf_section_content), 10,
+                             f"PDF '{header}' section should have substantial content")
+
+    def test_no_empty_or_placeholder_sections(self):
+        """Test that no sections are empty or contain placeholder text"""
+        preview_content = template_engine.render_cv_preview(self.sample_cv_data)
+        pdf_content = template_engine.render_cv_for_pdf(self.sample_cv_data)
+        
+        # Check for various placeholder patterns (exclude legitimate markdown formatting)
+        bad_patterns = [
+            'TODO', 'PLACEHOLDER', 'TBD', 'TBA', 'XXX',
+            '{{ ', '}}', 'undefined', 'null', 'None',
+            '[FILL IN]', '[INSERT]', '[REPLACE]', '____',
+            'Lorem ipsum', 'Sample text', 'Example content'
+        ]
+        
+        for pattern in bad_patterns:
+            self.assertNotIn(pattern, preview_content,
+                           f"Preview contains placeholder pattern: {pattern}")
+            self.assertNotIn(pattern, pdf_content,
+                           f"PDF contains placeholder pattern: {pattern}")
+        
+        # Check that sections have actual data, not just headers
+        import re
+        
+        # Check Professional Summary
+        for format_name, content in [('preview', preview_content), ('PDF', pdf_content)]:
+            summary_match = re.search(
+                rf'PROFESSIONAL SUMMARY(.*?)(?=(?:CORE SKILLS|PROFESSIONAL EXPERIENCE|$))', 
+                content, re.DOTALL | re.IGNORECASE
+            )
+            self.assertIsNotNone(summary_match, f"Professional Summary not found in {format_name}")
+            summary_content = summary_match.group(1).strip()
+            self.assertIn(self.sample_cv_data.professional_summary, summary_content,
+                         f"Professional Summary in {format_name} missing expected content")
+        
+        # Check Core Skills (check individual skills exist)
+        for format_name, content in [('preview', preview_content), ('PDF', pdf_content)]:
+            skills_match = re.search(
+                rf'CORE SKILLS(.*?)(?=(?:PROFESSIONAL EXPERIENCE|$))', 
+                content, re.DOTALL | re.IGNORECASE
+            )
+            self.assertIsNotNone(skills_match, f"Core Skills not found in {format_name}")
+            skills_content = skills_match.group(1).strip()
+            # Check that at least first 3 skills are present
+            for skill in self.sample_cv_data.skills[:3]:
+                self.assertIn(skill, skills_content,
+                             f"Skill '{skill}' not found in Core Skills section in {format_name}")
+        
+        # Check Professional Experience
+        for format_name, content in [('preview', preview_content), ('PDF', pdf_content)]:
+            experience_match = re.search(
+                rf'PROFESSIONAL EXPERIENCE(.*?)(?=(?:ADDITIONAL INFORMATION|$))', 
+                content, re.DOTALL | re.IGNORECASE
+            )
+            self.assertIsNotNone(experience_match, f"Professional Experience not found in {format_name}")
+            experience_content = experience_match.group(1).strip()
+            self.assertIn(self.sample_cv_data.current_role.job_title, experience_content,
+                         f"Current role job title not found in Professional Experience section in {format_name}")
+
 
 if __name__ == '__main__':
     unittest.main()
