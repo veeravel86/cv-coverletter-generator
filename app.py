@@ -363,7 +363,7 @@ def handle_generation(generation_mode):
         with generate_whole_cv_cols[1]:
             # Remove dependency on whole_cv_content for template-based preview
             if st.session_state.get('whole_cv_contact') and st.session_state.get('individual_generations'):
-                preview_cols = st.columns(2)
+                preview_cols = st.columns(3)
                 
                 with preview_cols[0]:
                     if st.button("👁️ Preview Here", help="Preview CV in current page"):
@@ -372,6 +372,10 @@ def handle_generation(generation_mode):
                 with preview_cols[1]:
                     if st.button("🔗 Preview in New Tab", help="Open CV preview in new browser tab"):
                         generate_cv_html_for_new_tab()
+                
+                with preview_cols[2]:
+                    if st.button("📋 View CV Data", help="View CV data in JSON format"):
+                        show_cv_data_json()
         
         with generate_whole_cv_cols[2]:
             # Remove dependency on whole_cv_content for template-based PDF generation
@@ -2527,6 +2531,92 @@ def generate_cv_html_for_new_tab():
     except Exception as e:
         logger.error(f"HTML generation for new tab error: {e}")
         st.error(f"❌ Error generating HTML preview: {str(e)}")
+
+def show_cv_data_json():
+    """Display CV data in JSON format for inspection"""
+    import json
+    from dataclasses import asdict
+    
+    try:
+        # Check if we have sufficient data
+        if not st.session_state.get('whole_cv_contact') or not st.session_state.get('individual_generations'):
+            st.warning("⚠️ No CV content available for display. Please generate individual sections first.")
+            return
+        
+        # Convert to structured format
+        cv_data = convert_session_to_cvdata()
+        
+        # Convert dataclass to dictionary for JSON serialization
+        cv_dict = asdict(cv_data)
+        
+        # Create formatted JSON string
+        json_str = json.dumps(cv_dict, indent=2, ensure_ascii=False)
+        
+        # Display in expandable sections for better organization
+        st.subheader("📋 CV Data Structure (JSON Format)")
+        
+        # Show basic stats
+        stats_col1, stats_col2, stats_col3 = st.columns(3)
+        with stats_col1:
+            st.metric("Total Experience", len(cv_data.experience))
+        with stats_col2:
+            st.metric("Skills Count", len(cv_data.skills))
+        with stats_col3:
+            st.metric("Data Size", f"{len(json_str)} chars")
+        
+        # Create tabs for different data views
+        tab1, tab2, tab3 = st.tabs(["🔍 Structured View", "📄 Raw JSON", "💾 Download"])
+        
+        with tab1:
+            # Structured view with expandable sections
+            st.write("**Contact Information:**")
+            contact_json = json.dumps(asdict(cv_data.contact), indent=2, ensure_ascii=False)
+            st.code(contact_json, language="json")
+            
+            st.write("**Professional Summary:**")
+            st.code(f'"{cv_data.professional_summary}"', language="json")
+            
+            st.write("**Skills:**")
+            skills_json = json.dumps(cv_data.skills, indent=2, ensure_ascii=False)
+            st.code(skills_json, language="json")
+            
+            if cv_data.experience:
+                st.write("**Experience (First Entry Preview):**")
+                exp_preview = asdict(cv_data.experience[0]) if cv_data.experience else {}
+                exp_json = json.dumps(exp_preview, indent=2, ensure_ascii=False)
+                st.code(exp_json, language="json")
+                
+                if len(cv_data.experience) > 1:
+                    st.info(f"📝 Showing 1 of {len(cv_data.experience)} experience entries. View full JSON in 'Raw JSON' tab.")
+        
+        with tab2:
+            # Full JSON view
+            st.write("**Complete CV Data Structure:**")
+            st.code(json_str, language="json")
+        
+        with tab3:
+            # Download options
+            st.write("**Download CV Data:**")
+            
+            # Create download button for JSON
+            import base64
+            json_bytes = json_str.encode('utf-8')
+            b64_json = base64.b64encode(json_bytes).decode()
+            
+            filename = f"cv_data_{cv_data.contact.name.replace(' ', '_').lower()}.json"
+            download_link = f'<a href="data:application/json;base64,{b64_json}" download="{filename}">📄 Download CV Data as JSON</a>'
+            
+            st.markdown(download_link, unsafe_allow_html=True)
+            
+            st.info(f"📊 **Data Summary:**\n"
+                   f"- Contact: {cv_data.contact.name} ({cv_data.contact.email})\n"
+                   f"- Experience entries: {len(cv_data.experience)}\n"
+                   f"- Skills: {len(cv_data.skills)}\n"
+                   f"- Professional summary: {len(cv_data.professional_summary)} characters")
+        
+    except Exception as e:
+        logger.error(f"CV data JSON display error: {e}")
+        st.error(f"❌ Error displaying CV data: {str(e)}")
 
 def generate_cv_pdf_structured():
     """Generate CV PDF using HTML-to-PDF converter to match CV preview exactly"""
