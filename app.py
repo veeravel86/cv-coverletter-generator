@@ -1115,9 +1115,15 @@ def generate_experience_bullets(llm_service, context_builder):
 SAMPLE CV CONTENT:
 {sample_cv_context}
 
-TASK: Extract the current/most recent position details and format as JSON.
+TASK: Extract the current/most recent position details and format as valid JSON.
 
-OUTPUT FORMAT (JSON):
+CRITICAL JSON FORMATTING REQUIREMENTS:
+- Return ONLY valid JSON, no markdown code blocks (```json), no explanations
+- Use double quotes for all strings, no single quotes
+- Escape special characters in strings (quotes, backslashes, newlines)
+- Ensure proper JSON structure with correct brackets and commas
+
+OUTPUT FORMAT (VALID JSON ONLY):
 {{
     "role_data": {{
         "position_name": "exact job title from CV",
@@ -1146,21 +1152,56 @@ EXTRACTION RULES:
 - Extract key achievement bullets exactly as written in CV (each as separate array item)
 - Include up to 8 bullet points, each as a separate row in key_bullets array
 - Focus on the most recent/current position only
+- Ensure all text is properly escaped for JSON (no unescaped quotes or newlines)
 
-Return ONLY the JSON object, no additional text."""
+RESPONSE MUST BE VALID JSON ONLY - NO OTHER TEXT OR FORMATTING."""
 
             # Get structured role data from LLM
             role_extraction = llm_service.generate_content(extraction_prompt, max_tokens=500)
             
             # Parse the JSON response
             try:
-                extracted_data = json.loads(role_extraction.strip())
+                # Clean the response - remove common prefixes/suffixes and markdown formatting
+                clean_response = role_extraction.strip()
+                if clean_response.startswith("```json"):
+                    clean_response = clean_response[7:]
+                if clean_response.endswith("```"):
+                    clean_response = clean_response[:-3]
+                clean_response = clean_response.strip()
+                
+                extracted_data = json.loads(clean_response)
                 role_data = extracted_data.get('role_data', extracted_data)  # Handle both formats
-            except json.JSONDecodeError:
-                # Fallback if JSON parsing fails
+            except json.JSONDecodeError as e:
+                # Enhanced fallback: try to extract basic info from CV context
+                st.warning(f"⚠️ JSON parsing failed, using fallback extraction. Error: {str(e)[:100]}")
+                
+                # Try to extract company name from CV context using simple text parsing
+                cv_text = sample_cv_context.lower()
+                company_name = "Technology Company"  # default
+                
+                # Look for common company indicators
+                import re
+                company_patterns = [
+                    r'company[:\s]+([^,\n]+)',
+                    r'employer[:\s]+([^,\n]+)',
+                    r'organization[:\s]+([^,\n]+)',
+                    r'(?:at|@)\s+([A-Z][A-Za-z\s&]+)(?:\s+\||\s*,|\s*\n)',
+                ]
+                
+                for pattern in company_patterns:
+                    match = re.search(pattern, sample_cv_context, re.IGNORECASE)
+                    if match:
+                        potential_company = match.group(1).strip()
+                        # Filter out common false positives
+                        if (len(potential_company) > 2 and 
+                            not potential_company.lower() in ['remote', 'present', 'current', 'years', 'months']):
+                            company_name = potential_company
+                            break
+                
+                # Fallback role data with improved company extraction
                 role_data = {
                     "position_name": "Senior Engineering Manager",
-                    "company_name": "Technology Company",
+                    "company_name": company_name,
                     "location": "Remote",
                     "start_date": "Jan 2022", 
                     "end_date": "Present",
