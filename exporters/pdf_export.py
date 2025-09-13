@@ -846,37 +846,60 @@ class PDFExporter:
             leftIndent=0
         )
         
-        # Job header
+        # Job header - for job titles
         styles['JobHeader'] = ParagraphStyle(
             'JobHeader',
+            parent=self.styles['Normal'],
+            fontSize=11,
+            textColor=black,
+            spaceBefore=0,
+            spaceAfter=2,
+            leading=14
+        )
+        
+        # Company/location text
+        styles['CompanyText'] = ParagraphStyle(
+            'CompanyText',
             parent=self.styles['Normal'],
             fontSize=10,
             textColor=colors['secondary'],
             spaceBefore=0,
-            spaceAfter=0
+            spaceAfter=4
+        )
+        
+        # Date text
+        styles['DateText'] = ParagraphStyle(
+            'DateText',
+            parent=self.styles['Normal'],
+            fontSize=10,
+            textColor=HexColor('#666666'),
+            spaceBefore=0,
+            spaceAfter=2
         )
         
         # Bullet points
         styles['BulletText'] = ParagraphStyle(
             'BulletText',
             parent=self.styles['Normal'],
-            fontSize=9,
+            fontSize=9.5,
             textColor=black,
             leftIndent=15,
             bulletIndent=5,
-            spaceBefore=4,
-            spaceAfter=4
+            spaceBefore=3,
+            spaceAfter=3,
+            leading=12
         )
         
-        # Job titles for previous roles
+        # Job titles for previous roles (same as JobHeader for consistency)
         styles['JobTitle'] = ParagraphStyle(
             'JobTitle',
             parent=self.styles['Normal'],
             fontSize=11,
-            textColor=colors['secondary'],
-            spaceBefore=8,
-            spaceAfter=4,
-            leftIndent=0
+            textColor=black,
+            spaceBefore=12,
+            spaceAfter=2,
+            leftIndent=0,
+            leading=14
         )
         
         return styles
@@ -989,7 +1012,7 @@ class PDFExporter:
         return skills[:10]  # Limit to top 10 skills
     
     def _add_current_role_experience(self, story: List, experience_text: str, styles: Dict):
-        """Add current role with job title header and SAR bullets"""
+        """Add current role with LinkedIn-style formatting"""
         if not experience_text:
             return
             
@@ -999,22 +1022,70 @@ class PDFExporter:
         # Look for job title line (contains |)
         for line in lines:
             if '|' in line and not line.startswith(('•', '-', '*', '**')):
-                # Parse job title and company
-                parts = line.split('|')
+                # Parse job title, company, location, dates
+                parts = [p.strip() for p in line.split('|')]
                 if len(parts) >= 2:
-                    job_title = parts[0].strip()
-                    company_info = parts[1].strip()
+                    job_title = parts[0]
+                    company_location = parts[1]
                     
-                    # Add job title header with bold job title
-                    role_line = f"<b>{job_title}</b> | {company_info}"
-                    story.append(Paragraph(role_line, styles['JobHeader']))
+                    # Extract dates if present (usually in format MM/YYYY - Present or MM/YYYY - MM/YYYY)
+                    date_pattern = r'(\d{2}/\d{4}\s*-\s*(?:\d{2}/\d{4}|Present|Current))'
+                    date_match = re.search(date_pattern, company_location)
+                    
+                    if date_match:
+                        dates = date_match.group(1)
+                        company_location = company_location.replace(dates, '').strip()
+                    else:
+                        dates = "Present"
+                    
+                    # LinkedIn-style: Bold job title on left, dates on right
+                    # Using a table for proper alignment
+                    from reportlab.platypus import Table, TableStyle
+                    
+                    job_header_data = [[
+                        Paragraph(f"<b>{job_title}</b>", styles['JobHeader']),
+                        Paragraph(dates, styles['DateText'])
+                    ]]
+                    
+                    job_header_table = Table(job_header_data, colWidths=[4.5*inch, 2*inch])
+                    job_header_table.setStyle(TableStyle([
+                        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                        ('TOPPADDING', (0, 0), (-1, -1), 0),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                    ]))
+                    
+                    story.append(job_header_table)
+                    
+                    # Add company and location line below
+                    if company_location:
+                        story.append(Paragraph(company_location, styles['CompanyText']))
+                    
                     story.append(Spacer(1, 0.05*inch))
                     job_title_found = True
                     break
         
         # If no job title found, use default
         if not job_title_found:
-            story.append(Paragraph("<b>Current Role</b> | Present", styles['JobHeader']))
+            from reportlab.platypus import Table, TableStyle
+            default_header = [[
+                Paragraph("<b>Current Position</b>", styles['JobHeader']),
+                Paragraph("Present", styles['DateText'])
+            ]]
+            default_table = Table(default_header, colWidths=[4.5*inch, 2*inch])
+            default_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ]))
+            story.append(default_table)
             story.append(Spacer(1, 0.05*inch))
         
         # Add the 8 SAR bullets
@@ -1140,7 +1211,9 @@ class PDFExporter:
         story.append(Spacer(1, 0.1*inch))
     
     def _process_previous_roles_with_titles(self, story: List, lines: List[str], styles: Dict):
-        """Process previous roles that have job title lines with pipe symbols"""
+        """Process previous roles with LinkedIn-style formatting"""
+        from reportlab.platypus import Table, TableStyle
+        
         current_role = None
         current_company = None
         bullet_count = 0
@@ -1149,16 +1222,52 @@ class PDFExporter:
         for line in lines:
             # Check if this is a role/company line (contains |)
             if '|' in line and not line.startswith(('•', '-', '*', '**')):
-                # Parse job title and company
-                parts = line.split('|')
+                # Parse job title, company, location, dates
+                parts = [p.strip() for p in line.split('|')]
                 if len(parts) >= 2:
-                    current_role = parts[0].strip()
-                    current_company = parts[1].strip()
+                    current_role = parts[0]
+                    company_info = parts[1]
                     bullet_count = 0  # Reset bullet count for new role
                     
-                    # Add role header
-                    role_line = f"<b>{current_role}</b> | {current_company}"
-                    story.append(Paragraph(role_line, styles['JobTitle']))
+                    # Extract dates from company info
+                    date_pattern = r'(\d{2}/\d{4}\s*-\s*(?:\d{2}/\d{4}|Present|Current))'
+                    date_match = re.search(date_pattern, company_info)
+                    
+                    if date_match:
+                        dates = date_match.group(1)
+                        company_location = company_info.replace(dates, '').strip()
+                    else:
+                        # Fallback if no dates found
+                        dates = ""
+                        company_location = company_info
+                    
+                    # LinkedIn-style: Bold job title on left, dates on right
+                    job_header_data = [[
+                        Paragraph(f"<b>{current_role}</b>", styles['JobTitle']),
+                        Paragraph(dates, styles['DateText'])
+                    ]]
+                    
+                    job_header_table = Table(job_header_data, colWidths=[4.5*inch, 2*inch])
+                    job_header_table.setStyle(TableStyle([
+                        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                        ('TOPPADDING', (0, 0), (-1, -1), 0),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                    ]))
+                    
+                    # Add spacing between roles for better readability
+                    if bullet_count > 0:  # Not the first role
+                        story.append(Spacer(1, 0.15*inch))
+                    
+                    story.append(job_header_table)
+                    
+                    # Add company and location line below
+                    if company_location:
+                        story.append(Paragraph(company_location, styles['CompanyText']))
+                    
                     story.append(Spacer(1, 0.05*inch))
                     
             # Check if this is a bullet point
