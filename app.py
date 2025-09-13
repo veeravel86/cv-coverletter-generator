@@ -387,8 +387,15 @@ def handle_generation(generation_mode):
         with generate_whole_cv_cols[1]:
             # Remove dependency on whole_cv_content for template-based preview
             if st.session_state.get('whole_cv_contact') and st.session_state.get('individual_generations'):
-                if st.button("👁️ Preview CV", help="Preview the complete CV using structured data format"):
-                    show_cv_preview_structured()
+                preview_cols = st.columns(2)
+                
+                with preview_cols[0]:
+                    if st.button("👁️ Preview Here", help="Preview CV in current page"):
+                        show_cv_preview_structured()
+                
+                with preview_cols[1]:
+                    if st.button("🔗 Preview in New Tab", help="Open CV preview in new browser tab"):
+                        generate_cv_html_for_new_tab()
         
         with generate_whole_cv_cols[2]:
             # Remove dependency on whole_cv_content for template-based PDF generation
@@ -1232,9 +1239,21 @@ Return ONLY the JSON object with exactly 8 bullets, no additional text."""
 
             bullets_response = llm_service.generate_content(bullet_prompt, max_tokens=800)
             
+            # Clean the response - remove markdown code blocks if present
+            cleaned_response = bullets_response.strip()
+            if '```json' in cleaned_response:
+                # Extract JSON from markdown code block
+                start_idx = cleaned_response.find('```json') + 7
+                end_idx = cleaned_response.find('```', start_idx)
+                if end_idx > start_idx:
+                    cleaned_response = cleaned_response[start_idx:end_idx].strip()
+            elif '```' in cleaned_response:
+                # Remove any markdown code blocks
+                cleaned_response = cleaned_response.replace('```', '').strip()
+            
             # Parse the bullets JSON response
             try:
-                bullets_data = json.loads(bullets_response.strip())
+                bullets_data = json.loads(cleaned_response)
                 optimized_bullets = bullets_data.get('optimized_bullets', [])
             except json.JSONDecodeError:
                 # Fallback: treat as plain text and split by lines
@@ -2516,6 +2535,103 @@ def show_cv_preview_structured():
         st.error(f"❌ Error generating templated preview: {str(e)}")
         # Fallback to simple error message instead of broken old system
         st.error("❌ Unable to generate CV preview. Please ensure all sections are generated first.")
+
+def generate_cv_html_for_new_tab():
+    """Generate CV HTML content and create downloadable link for new tab viewing"""
+    import base64
+    import uuid
+    
+    try:
+        # Check if we have sufficient data
+        if not st.session_state.get('whole_cv_contact') or not st.session_state.get('individual_generations'):
+            st.error("❌ No CV content available. Please generate individual sections first.")
+            return
+        
+        # Convert to structured format and generate CV markdown
+        cv_data = convert_session_to_cvdata()
+        markdown_content = template_engine.render_cv_preview(cv_data)
+        
+        # Convert markdown to HTML with the same styling as our HTML-to-PDF converter
+        import markdown
+        html_body = markdown.markdown(
+            markdown_content, 
+            extensions=['tables', 'fenced_code', 'nl2br']
+        )
+        
+        # Create complete HTML document with professional styling
+        full_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CV Preview - {cv_data.contact.name}</title>
+    <style>
+        {html_to_pdf_converter.css_styles}
+        
+        /* Additional styles for web viewing */
+        body {{
+            max-width: 8.5in;
+            margin: 20px auto;
+            padding: 40px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            background: white;
+        }}
+        
+        @media print {{
+            body {{
+                box-shadow: none;
+                margin: 0;
+                padding: 0.5in;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="cv-container">
+        {html_body}
+    </div>
+    
+    <script>
+        // Add print functionality
+        document.addEventListener('keydown', function(e) {{
+            if (e.ctrlKey && e.key === 'p') {{
+                window.print();
+                e.preventDefault();
+            }}
+        }});
+    </script>
+</body>
+</html>
+"""
+        
+        # Create a unique filename
+        timestamp = uuid.uuid4().hex[:8]
+        filename = f"cv_preview_{cv_data.contact.name.replace(' ', '_')}_{timestamp}.html"
+        
+        # Convert to base64 for download
+        html_bytes = full_html.encode('utf-8')
+        b64_html = base64.b64encode(html_bytes).decode()
+        
+        # Create download link that opens in new tab
+        download_link = f'<a href="data:text/html;base64,{b64_html}" download="{filename}" target="_blank">📄 Download & Open CV Preview</a>'
+        
+        st.success("✅ CV HTML preview generated successfully!")
+        st.markdown(
+            f"🔗 **Preview Options:**\n\n"
+            f"1. {download_link} (Downloads HTML file and opens in new tab)\n"
+            f"2. Right-click the link above and select 'Open in new tab'\n"
+            f"3. Use Ctrl+P in the new tab to print",
+            unsafe_allow_html=True
+        )
+        
+        # Also provide a preview of the content length
+        word_count = len(markdown_content.split())
+        st.info(f"📊 Generated HTML preview: {word_count} words, {len(full_html)} characters")
+        
+    except Exception as e:
+        logger.error(f"HTML generation for new tab error: {e}")
+        st.error(f"❌ Error generating HTML preview: {str(e)}")
 
 def generate_cv_pdf_structured():
     """Generate CV PDF using HTML-to-PDF converter to match CV preview exactly"""

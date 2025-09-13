@@ -182,7 +182,20 @@ OUTPUT FORMAT (JSON):
             try:
                 import json
                 bullet_response = list(results['results'].values())[0]
-                bullet_data = json.loads(bullet_response)
+                
+                # Clean the response - remove markdown code blocks if present
+                cleaned_response = bullet_response.strip()
+                if '```json' in cleaned_response:
+                    # Extract JSON from markdown code block
+                    start_idx = cleaned_response.find('```json') + 7
+                    end_idx = cleaned_response.find('```', start_idx)
+                    if end_idx > start_idx:
+                        cleaned_response = cleaned_response[start_idx:end_idx].strip()
+                elif '```' in cleaned_response:
+                    # Remove any markdown code blocks
+                    cleaned_response = cleaned_response.replace('```', '').strip()
+                
+                bullet_data = json.loads(cleaned_response)
                 return bullet_data.get('optimized_bullets', bullets)
             except:
                 logger.warning(f"⚠️ JSON parsing failed for {role_name} bullets, using original")
