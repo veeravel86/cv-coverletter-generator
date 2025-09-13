@@ -997,11 +997,13 @@ class PDFExporter:
                     sections[current_section] = '\n'.join(current_content).strip()
                 current_section = 'summary'
                 current_content = []
-            elif 'CORE SKILLS' in line_upper or 'SKILLS' in line_upper:
+            elif ('CORE SKILLS' in line_upper or 'SKILLS' in line_upper) and not line_upper.startswith('•'):
                 if current_section and current_content:
                     sections[current_section] = '\n'.join(current_content).strip()
                 current_section = 'skills'
                 current_content = []
+                # Skip the header line, don't add it to content
+                continue
             elif 'PROFESSIONAL EXPERIENCE' in line_upper or 'EXPERIENCE' in line_upper:
                 if current_section and current_content:
                     sections[current_section] = '\n'.join(current_content).strip()
@@ -1184,19 +1186,36 @@ class PDFExporter:
         lines = skills_text.strip().split('\n')
         for line in lines:
             line = line.strip()
-            if line:
-                # Remove bullets and formatting
-                line = re.sub(r'^[\-\•\*\+]\s*', '', line)
-                line = re.sub(r'\*\*(.*?)\*\*', r'\1', line)  # Remove markdown bold
+            if not line:
+                continue
                 
-                # Split by common separators
-                if '|' in line:
-                    row_skills = [skill.strip() for skill in line.split('|') if skill.strip()]
-                    skills.extend(row_skills)
-                elif ',' in line:
-                    row_skills = [skill.strip() for skill in line.split(',') if skill.strip()]
-                    skills.extend(row_skills)
-                else:
+            # Skip header lines
+            line_upper = line.upper()
+            if ('CORE SKILLS' in line_upper or 
+                'SKILLS' in line_upper or 
+                line.startswith('#') or
+                line.lower().startswith('skills') or 
+                line.lower().startswith('core skills')):
+                continue
+                
+            # Remove bullets and formatting
+            line = re.sub(r'^[\-\•\*\+\d\.]\s*', '', line)
+            line = re.sub(r'\*\*(.*?)\*\*', r'\1', line)  # Remove markdown bold
+            line = line.strip()
+            
+            if not line:
+                continue
+            
+            # Split by common separators
+            if '|' in line:
+                row_skills = [skill.strip() for skill in line.split('|') if skill.strip()]
+                skills.extend(row_skills)
+            elif ',' in line and len(line.split(',')) > 1:
+                row_skills = [skill.strip() for skill in line.split(',') if skill.strip()]
+                skills.extend(row_skills)
+            else:
+                # Single skill - validate it's reasonable length
+                if len(line.split()) <= 4:  # Skills should be short phrases
                     skills.append(line)
         
         return skills[:10]  # Limit to top 10 skills
