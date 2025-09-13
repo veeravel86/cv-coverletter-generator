@@ -15,6 +15,7 @@ from services.style_extract import get_style_extractor
 from exporters.markdown_export import get_markdown_exporter
 from exporters.docx_export import get_docx_exporter
 from exporters.pdf_export import get_pdf_exporter
+from services.html_to_pdf import html_to_pdf_converter
 from utils.text import TextProcessor, ContentValidator
 from utils.style import StyleApplicator
 from models.cv_data import CVData, ContactInfo, RoleExperience, ExperienceBullet
@@ -2517,7 +2518,7 @@ def show_cv_preview_structured():
         st.error("❌ Unable to generate CV preview. Please ensure all sections are generated first.")
 
 def generate_cv_pdf_structured():
-    """Generate CV PDF using template engine and structured CVData format"""
+    """Generate CV PDF using HTML-to-PDF converter to match CV preview exactly"""
     try:
         # Check if we have sufficient data
         if not st.session_state.get('whole_cv_contact') or not st.session_state.get('individual_generations'):
@@ -2532,51 +2533,31 @@ def generate_cv_pdf_structured():
             st.error("❌ Missing essential contact information (name/email). Please check your contact details.")
             return None
         
-        # Get PDF exporter
-        pdf_exporter = get_pdf_exporter()
+        # Generate CV preview markdown content (same as what user sees)
+        markdown_content = template_engine.render_cv_preview(cv_data)
         
-        # Create PDF context using template engine
-        pdf_context = template_engine.create_pdf_context(cv_data)
+        # Validate that we have actual content
+        if not markdown_content or len(markdown_content.strip()) < 100:
+            st.error("❌ CV preview content is empty or too short. Please regenerate sections.")
+            return None
         
-        # Always use template engine to ensure consistency with preview
-        try:
-            # Use PDF-specific template (no markdown formatting) - matches cv_pdf.txt template
-            formatted_content = template_engine.render_cv_for_pdf(cv_data)
-            contact_dict = cv_data.contact.to_dict()
-            
-            pdf_path = pdf_exporter.create_direct_cv_pdf(
-                contact_dict, formatted_content, color_scheme="teal"
-            )
-        except AttributeError:
-            # Fallback: Use template engine to render preview content
-            formatted_content = template_engine.render_cv_preview(cv_data)
-            contact_dict = cv_data.contact.to_dict()
-            
-            pdf_path = pdf_exporter.create_professional_cv_pdf(
-                formatted_content, contact_dict, color_scheme="teal"
-            )
+        # Convert markdown preview to PDF using HTML-to-PDF converter
+        # This ensures the PDF matches exactly what the user sees in preview
+        pdf_data = html_to_pdf_converter.convert_markdown_to_pdf(markdown_content)
         
-        # Validate PDF was created
-        if not os.path.exists(pdf_path):
-            raise Exception("PDF file was not created")
+        # Validate PDF data
+        if not pdf_data or len(pdf_data) < 1000:
+            raise Exception("Generated PDF is empty or too small")
         
-        file_size = os.path.getsize(pdf_path)
-        if file_size < 1000:  # PDF should be at least 1KB
-            raise Exception(f"PDF file is too small ({file_size} bytes), likely empty")
-        
-        # Read and return PDF data
-        with open(pdf_path, "rb") as file:
-            pdf_data = file.read()
-            
-            if len(pdf_data) < 1000:
-                raise Exception("PDF data is too small, likely corrupted or empty")
-            
-            return pdf_data
+        logger.info(f"✅ Successfully generated CV PDF using HTML-to-PDF converter ({len(pdf_data)} bytes)")
+        return pdf_data
             
     except Exception as e:
-        logger.error(f"Template-based PDF generation error: {e}")
-        st.error(f"❌ Error generating template-based PDF: {str(e)}")
-        # Fallback to original method
+        logger.error(f"HTML-to-PDF generation error: {e}")
+        st.error(f"❌ Error generating PDF from CV preview: {str(e)}")
+        
+        # Fallback to original broken method as last resort
+        st.warning("⚠️ Attempting fallback PDF generation method...")
         return generate_cv_pdf()
 
 if __name__ == "__main__":
