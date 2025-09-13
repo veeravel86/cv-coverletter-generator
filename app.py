@@ -20,7 +20,6 @@ from utils.text import TextProcessor, ContentValidator
 from utils.style import StyleApplicator
 from models.cv_data import CVData, ContactInfo, RoleExperience, ExperienceBullet
 from services.template_engine import template_engine
-from services.parallel_processor import parallel_processor
 
 load_dotenv()
 
@@ -263,29 +262,6 @@ def handle_generation(generation_mode):
         if st.button("📋 Generate Previous Experience Summary", help="Summarize previous work experience"):
             generate_previous_experience_summary(llm_service, context_builder)
     
-    # Parallel Processing Section
-    st.markdown("---")
-    st.subheader("⚡ Parallel Processing (Speed Optimized)")
-    st.markdown("Generate multiple sections simultaneously for faster processing")
-    
-    parallel_cols = st.columns(2)
-    
-    with parallel_cols[0]:
-        if st.button("🚀 Generate CV Sections in Parallel", help="Generate Summary, Skills & Additional Info simultaneously", type="secondary"):
-            generate_cv_sections_parallel(llm_service, context_builder)
-    
-    with parallel_cols[1]:
-        if st.button("⚡ Generate Complete CV (Parallel)", help="Generate complete CV using parallel processing", type="secondary"):
-            # Get contact info from state
-            contact_info = st.session_state.get('whole_cv_contact', {})
-            name = contact_info.get('name', 'Professional Name')
-            email = contact_info.get('email', 'email@example.com')
-            phone = contact_info.get('phone', 'Phone Number')
-            location = contact_info.get('location', 'Location')
-            linkedin = contact_info.get('linkedin', '')
-            website = contact_info.get('website', '')
-            
-            generate_complete_cv_parallel(llm_service, context_builder, name, email, phone, location, linkedin, website)
 
     # Display all generated individual sections persistently
     st.markdown("---")
@@ -1633,98 +1609,7 @@ def generate_whole_cv(llm_service, context_builder, name, email, phone, location
             st.error(f"❌ Error generating complete CV: {str(e)}")
             logger.error(f"CV generation error: {e}")
 
-def generate_cv_sections_parallel(llm_service, context_builder):
-    """Generate multiple CV sections in parallel instead of sequentially"""
-    
-    with st.spinner("🚀 Generating CV sections in parallel..."):
-        try:
-            results = parallel_processor.run_parallel_cv_sections(llm_service, context_builder)
-            
-            if results['results']:
-                # Store results in session state
-                for section, content in results['results'].items():
-                    st.session_state.individual_generations[section] = content
-                    logger.info(f"✅ Parallel section '{section}' generated successfully")
-                
-                # Show summary
-                successful = results['summary']['successful']
-                total = results['summary']['total']
-                st.success(f"✅ {successful}/{total} CV sections generated in parallel!")
-                
-                if results['errors']:
-                    st.warning(f"⚠️ Failed sections: {list(results['errors'].keys())}")
-                
-                st.info("👁️ View your generated content in the 'Generated Individual Sections' below")
-                
-            else:
-                st.error("❌ No CV sections were generated successfully")
-                
-        except Exception as e:
-            st.error(f"❌ Error in parallel CV section generation: {str(e)}")
-            logger.error(f"Parallel CV generation error: {e}")
 
-def generate_complete_cv_parallel(llm_service, context_builder, name, email, phone, location, linkedin, website):
-    """Generate complete CV using parallel processing for speed optimization"""
-    
-    with st.spinner("⚡ Generating complete CV with parallel processing..."):
-        try:
-            # First run parallel CV sections
-            parallel_results = parallel_processor.run_parallel_cv_sections(llm_service, context_builder)
-            
-            if not parallel_results['results']:
-                st.error("❌ Failed to generate parallel CV sections")
-                return
-                
-            # Extract parallel results
-            executive_summary = parallel_results['results'].get('executive_summary', '')
-            top_skills = parallel_results['results'].get('top_skills', '')  
-            additional_info = parallel_results['results'].get('additional_info', '')
-            
-            # Store parallel results in session state
-            st.session_state.individual_generations.update(parallel_results['results'])
-            
-            # Generate experience sections (current and previous) - these need context so run sequentially
-            st.info("🔄 Generating experience sections...")
-            
-            current_experience_response = generate_experience_bullets(llm_service, context_builder)
-            previous_experience_response = generate_previous_experience_summary(llm_service, context_builder)
-            
-            # Build complete CV content
-            contact_info = f"**{name}**\n📧 {email} | 📞 {phone} | 📍 {location}"
-            if linkedin:
-                contact_info += f" | 🔗 [LinkedIn]({linkedin})"
-            if website:
-                contact_info += f" | 🌐 [Website]({website})"
-                
-            cv_sections = [
-                contact_info,
-                "\n---\n",
-                "## **PROFESSIONAL SUMMARY**\n",
-                executive_summary,
-                "\n---\n", 
-                "## **CORE SKILLS**\n",
-                top_skills,
-                "\n---\n",
-                "## **PROFESSIONAL EXPERIENCE**\n",
-                st.session_state.individual_generations.get('current_experience', ''),
-                st.session_state.individual_generations.get('previous_experience', ''),
-                "\n---\n" if additional_info.strip() else "",
-                additional_info if additional_info.strip() else ""
-            ]
-            
-            complete_cv = "\n".join(filter(None, cv_sections))
-            st.session_state.whole_cv_content = complete_cv
-            
-            # Show performance summary
-            total_sections = parallel_results['summary']['total'] + 2  # +2 for experience sections
-            parallel_sections = parallel_results['summary']['successful']
-            
-            st.success(f"✅ Complete CV generated! ({parallel_sections}/{total_sections} sections used parallel processing)")
-            st.info("🎯 Performance: Executive Summary, Skills, and Additional Info generated in parallel")
-            
-        except Exception as e:
-            st.error(f"❌ Error in parallel complete CV generation: {str(e)}")
-            logger.error(f"Parallel complete CV generation error: {e}")
 
 def validate_cv_content(executive_summary, top_skills, experience_bullets):
     """Validate that CV content sections have sufficient content"""
@@ -1932,7 +1817,7 @@ def extract_skills_list(skills_text):
     if not skills_text:
         return []
     
-    # Handle pipe-separated format from parallel processor: **Skill1** | **Skill2** | **Skill3**
+    # Handle pipe-separated format: **Skill1** | **Skill2** | **Skill3**
     if '|' in skills_text:
         skills = []
         parts = skills_text.split('|')
