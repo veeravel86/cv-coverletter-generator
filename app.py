@@ -1907,29 +1907,37 @@ def extract_skills_list(skills_text):
     """Extract clean skills list from generated text"""
     import re
     
-    # Remove bold formatting and extract skills
-    cleaned = clean_generated_content(skills_text)
+    if not skills_text:
+        return []
     
-    # Try different patterns to extract skills
+    # Handle pipe-separated format from parallel processor: **Skill1** | **Skill2** | **Skill3**
+    if '|' in skills_text:
+        skills = []
+        parts = skills_text.split('|')
+        for part in parts:
+            # Clean each skill: remove ** and whitespace
+            clean_skill = part.strip().replace('**', '').replace('*', '').strip()
+            if clean_skill and len(clean_skill.split()) <= 3:  # Allow up to 3 words per skill
+                skills.append(clean_skill)
+        return skills[:10]
+    
+    # Handle line-by-line format
+    cleaned = clean_generated_content(skills_text)
     skills = []
     lines = cleaned.split('\n')
     
     for line in lines:
         line = line.strip()
-        if line and not line.startswith('**') and not line.startswith('#'):
-            # Remove bullet points and numbers
+        if line:
+            # Remove bullet points, numbers, and markdown formatting
             line = re.sub(r'^[\d\.\-\•\*\+]\s*', '', line)
-            if line:
+            line = line.replace('**', '').replace('*', '').strip()
+            
+            # Skip headers and empty lines
+            if line and not line.startswith('#') and len(line.split()) <= 3:
                 skills.append(line)
     
-    # Limit to 10 skills, ensure ≤2 words each
-    final_skills = []
-    for skill in skills[:10]:
-        words = skill.split()
-        if len(words) <= 2:
-            final_skills.append(skill)
-    
-    return final_skills[:10]
+    return skills[:10]
 
 def extract_experience_bullets(experience_text):
     """Extract experience bullets from generated text"""
@@ -1989,8 +1997,12 @@ def show_cv_preview():
         st.warning("⚠️ No CV content available for preview")
         return
     
-    with st.expander("👁️ Complete CV Preview - Click to expand", expanded=True):
-        st.markdown("### 📄 Generated CV Preview")
+    # Show CV preview with toggle for expanded view  
+    expanded_view = st.checkbox("📖 Show full-width CV preview", value=False, help="Check to see CV preview in full page width")
+    
+    if expanded_view:
+        # Full width preview
+        st.markdown("### 📄 Generated CV Preview (Full Width)")
         st.markdown("*Review your complete CV before downloading as PDF*")
         st.markdown("---")
         
@@ -1999,6 +2011,18 @@ def show_cv_preview():
         
         st.markdown("---")
         st.caption("🎯 Professional CV preview")
+    else:
+        # Compact expander view  
+        with st.expander("👁️ Complete CV Preview - Click to expand", expanded=True):
+            st.markdown("### 📄 Generated CV Preview")
+            st.markdown("*Review your complete CV before downloading as PDF*")
+            st.markdown("---")
+            
+            # Display the complete CV content
+            st.markdown(st.session_state.whole_cv_content)
+            
+            st.markdown("---")
+            st.caption("🎯 Professional CV preview")
 
 def generate_cv_pdf():
     """Generate CV as PDF and return the PDF data"""
@@ -2498,28 +2522,23 @@ def generate_cv_pdf_structured():
         # Create PDF context using template engine
         pdf_context = template_engine.create_pdf_context(cv_data)
         
-        # Check if the exporter has a method for structured data
-        if hasattr(pdf_exporter, 'create_cv_from_structured_data'):
-            # Use structured data method if available
-            pdf_path = pdf_exporter.create_cv_from_structured_data(cv_data, color_scheme="teal")
-        else:
-            # Use template engine to render content for PDF
-            try:
-                # Option 1: Use PDF-specific template (no markdown formatting)
-                formatted_content = template_engine.render_cv_for_pdf(cv_data)
-                contact_dict = cv_data.contact.to_dict()
-                
-                pdf_path = pdf_exporter.create_direct_cv_pdf(
-                    contact_dict, formatted_content, color_scheme="teal"
-                )
-            except AttributeError:
-                # Option 2: Use fallback method with CVData preview
-                formatted_content = cv_data.format_for_preview()
-                contact_dict = cv_data.contact.to_dict()
-                
-                pdf_path = pdf_exporter.create_professional_cv_pdf(
-                    formatted_content, contact_dict, color_scheme="teal"
-                )
+        # Always use template engine to ensure consistency with preview
+        try:
+            # Use PDF-specific template (no markdown formatting) - matches cv_pdf.txt template
+            formatted_content = template_engine.render_cv_for_pdf(cv_data)
+            contact_dict = cv_data.contact.to_dict()
+            
+            pdf_path = pdf_exporter.create_direct_cv_pdf(
+                contact_dict, formatted_content, color_scheme="teal"
+            )
+        except AttributeError:
+            # Fallback: Use template engine to render preview content
+            formatted_content = template_engine.render_cv_preview(cv_data)
+            contact_dict = cv_data.contact.to_dict()
+            
+            pdf_path = pdf_exporter.create_professional_cv_pdf(
+                formatted_content, contact_dict, color_scheme="teal"
+            )
         
         # Validate PDF was created
         if not os.path.exists(pdf_path):

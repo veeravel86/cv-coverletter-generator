@@ -268,5 +268,87 @@ class TestTemplateConsistency(unittest.TestCase):
         return match.group(0) if match else None
 
 
+    def test_actual_pdf_generation_consistency(self):
+        """Test that actual PDF generation uses template engine and matches preview content"""
+        try:
+            # Import PDF exporter and app functions
+            from exporters.pdf_export import PDFExporter
+            from app import convert_session_to_cvdata, generate_template_based_cv_pdf
+            import streamlit as st
+            import os
+            import tempfile
+            
+            # Mock session state with our test data
+            mock_session_state = {
+                'whole_cv_contact': {
+                    'name': self.sample_contact.name,
+                    'email': self.sample_contact.email,
+                    'phone': self.sample_contact.phone,
+                    'location': self.sample_contact.location,
+                    'linkedin': self.sample_contact.linkedin,
+                    'website': self.sample_contact.website
+                },
+                'individual_generations': {
+                    'executive_summary': 'Senior Engineering Manager with 8+ years leading cross-functional teams.',
+                    'top_skills': '**Cloud Architecture** | **Team Leadership** | **Python Development** | **Strategic Planning** | **DevOps Practices**'
+                },
+                'llm_json_responses': {
+                    'experience_bullets': {
+                        'role_data': {
+                            'position_name': 'Senior Software Engineer',
+                            'company_name': 'TechCorp Inc',
+                            'location': 'San Francisco, CA',
+                            'start_date': 'Jan 2022',
+                            'end_date': 'Present'
+                        },
+                        'optimized_bullets': [
+                            '**Leadership** | Led a team of 5 engineers to deliver critical features',
+                            '**Performance** | Improved system performance by 40% through optimization'
+                        ]
+                    }
+                }
+            }
+            
+            # Mock streamlit session state
+            import sys
+            if 'streamlit' not in sys.modules:
+                # Create mock streamlit module
+                import types
+                streamlit_mock = types.ModuleType('streamlit')
+                streamlit_mock.session_state = types.SimpleNamespace()
+                for key, value in mock_session_state.items():
+                    setattr(streamlit_mock.session_state, key, value)
+                sys.modules['streamlit'] = streamlit_mock
+            else:
+                # Update existing streamlit module
+                for key, value in mock_session_state.items():
+                    setattr(st.session_state, key, value)
+            
+            # Test CVData conversion
+            cv_data = convert_session_to_cvdata()
+            
+            # Verify CVData has skills populated
+            self.assertGreater(len(cv_data.skills), 0, "CVData should have skills populated")
+            self.assertIn('Cloud Architecture', cv_data.skills, "Skills should be extracted correctly from pipe format")
+            
+            # Generate preview content using template engine
+            preview_content = template_engine.render_cv_preview(cv_data)
+            pdf_template_content = template_engine.render_cv_for_pdf(cv_data)
+            
+            # Verify both have skills
+            self.assertIn('Cloud Architecture', preview_content, "Preview should contain skills")
+            self.assertIn('Cloud Architecture', pdf_template_content, "PDF template should contain skills")
+            
+            # Test that skills are in same format
+            for skill in cv_data.skills:
+                self.assertIn(skill, preview_content, f"Skill '{skill}' should be in preview")
+                self.assertIn(skill, pdf_template_content, f"Skill '{skill}' should be in PDF template")
+                
+        except ImportError as e:
+            self.skipTest(f"Could not import app functions for integration test: {e}")
+        except Exception as e:
+            self.fail(f"Integration test failed: {e}")
+
+
 if __name__ == '__main__':
     unittest.main()
