@@ -1169,7 +1169,7 @@ Return ONLY the JSON object, no additional text."""
                 }
             
             # Second LLM call: Generate optimized SAR bullets as JSON array
-            bullet_prompt = f"""You are an expert CV writer. Create 8 high-impact SAR format bullets for the current position.
+            bullet_prompt = f"""You are an expert CV writer. Create 8 high-impact achievement bullets for the current position.
 
 CURRENT ROLE DATA:
 Position: {role_data.get('position_name', 'Senior Position')}
@@ -1182,13 +1182,13 @@ JOB DESCRIPTION REQUIREMENTS:
 ORIGINAL CV BULLETS (reference):
 {chr(10).join(role_data.get('key_bullets', []))}
 
-GOAL: Create EXACTLY 8 achievement-focused bullets using SAR format that align with the target job requirements.
+GOAL: Create EXACTLY 8 achievement-focused bullets that align with the target job requirements.
 
 BULLET FORMAT:
-**Two Words** | Situation: [context]. Action: [what you did]. Result: [quantified outcome].
+**Two Words** | [Context/challenge] → [Action taken] → [Quantified outcome]
 
 EXAMPLE:
-**Platform Migration** | Situation: Led critical infrastructure upgrade affecting 50M+ users. Action: Designed zero-downtime migration strategy and coordinated 5 engineering teams. Result: Completed migration 2 weeks early with 99.99% uptime maintained.
+**Platform Migration** | Led critical infrastructure upgrade affecting 50M+ users → Designed zero-downtime migration strategy and coordinated 5 engineering teams → Completed migration 2 weeks early with 99.99% uptime maintained.
 
 CONTENT REQUIREMENTS:
 - Each bullet showcases different leadership/technical competencies
@@ -1200,14 +1200,14 @@ CONTENT REQUIREMENTS:
 OUTPUT FORMAT (JSON):
 {{
     "optimized_bullets": [
-        "**First Bullet** | SAR format bullet 1",
-        "**Second Bullet** | SAR format bullet 2",
-        "**Third Bullet** | SAR format bullet 3",
-        "**Fourth Bullet** | SAR format bullet 4",
-        "**Fifth Bullet** | SAR format bullet 5",
-        "**Sixth Bullet** | SAR format bullet 6",
-        "**Seventh Bullet** | SAR format bullet 7",
-        "**Eighth Bullet** | SAR format bullet 8"
+        "**First Bullet** | Achievement bullet 1",
+        "**Second Bullet** | Achievement bullet 2",
+        "**Third Bullet** | Achievement bullet 3",
+        "**Fourth Bullet** | Achievement bullet 4",
+        "**Fifth Bullet** | Achievement bullet 5",
+        "**Sixth Bullet** | Achievement bullet 6",
+        "**Seventh Bullet** | Achievement bullet 7",
+        "**Eighth Bullet** | Achievement bullet 8"
     ]
 }}
 
@@ -1432,47 +1432,9 @@ VALIDATION CHECK: Ensure every field comes directly from the CV content. Do not 
                     bullets = role.get('key_bullets', [])
                     
                     if bullets:
-                        bullet_prompt = f"""You are an expert CV writer. Transform the following work experience bullets into professional SAR (Situation-Action-Result) format.
-
-ROLE CONTEXT:
-Position: {role_name}
-Company: {company}
-
-ORIGINAL BULLETS:
-{chr(10).join(bullets)}
-
-OPTIMIZATION RULES:
-1. Use SAR format: Situation | Action | Result
-2. Start with 2-word bold heading: **Action Verb + Focus**
-3. Include quantified results when possible
-4. Keep each bullet under 25 words
-5. Use impactful action verbs
-6. Maintain professional tone
-
-FORMATTING:
-- Format: **Heading** | SAR content
-- Example: **System Design** | Architected microservices platform that reduced deployment time by 60% and improved system reliability for 50k+ users
-
-OUTPUT FORMAT (JSON):
-{{
-  "optimized_bullets": [
-    "**First Action** | Professional SAR format bullet 1",
-    "**Second Action** | Professional SAR format bullet 2",
-    "**Third Action** | Professional SAR format bullet 3"
-  ]
-}}"""
-                        
-                        bullet_response = llm_service.generate_content(bullet_prompt, max_tokens=1500)
-                        
-                        try:
-                            bullet_data = json.loads(bullet_response)
-                            optimized_bullets = bullet_data.get('optimized_bullets', bullets)
-                        except json.JSONDecodeError:
-                            st.warning(f"⚠️ JSON parsing failed for {role_name} bullets, using original")
-                            optimized_bullets = bullets
-                        
-                        # Update role with optimized bullets
-                        role['key_bullets'] = optimized_bullets
+                        # For previous positions, use original bullets from sample CV as-is
+                        # No SAR formatting or pipe symbols needed
+                        role['key_bullets'] = bullets
                     
                     optimized_roles.append(role)
                 
