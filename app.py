@@ -20,6 +20,7 @@ from utils.text import TextProcessor, ContentValidator
 from utils.style import StyleApplicator
 from models.cv_data import CVData, ContactInfo, RoleExperience, ExperienceBullet
 from services.template_engine import template_engine
+from services.sample_cv_parser import parse_and_cache_sample_cv
 
 load_dotenv()
 
@@ -164,6 +165,14 @@ def handle_document_upload():
                 # Store sample CV content for individual generation functions
                 if "sample_cv" in processed_data["texts"]:
                     st.session_state.sample_cv_content = processed_data["texts"]["sample_cv"]
+                    
+                    # Parse sample CV into structured JSON format using LLM
+                    with st.spinner("🔍 Parsing Sample CV into structured format..."):
+                        parse_result = parse_and_cache_sample_cv(processed_data["texts"]["sample_cv"])
+                        if parse_result["success"]:
+                            st.success("✅ Sample CV parsed successfully!")
+                        else:
+                            st.warning(f"⚠️ Sample CV parsing: {parse_result['message']}")
                 
                 # Extract style profile only if sample CV is available
                 if "sample_cv" in processed_data["texts"]:
@@ -289,7 +298,8 @@ def handle_generation(generation_mode):
                 st.markdown("##### 📞 Contact Information")
             with contact_header_cols[1]:
                 if st.button("🔄 Auto-fill from Sample CV", help="Extract contact info from uploaded Sample CV"):
-                    if 'sample_cv_content' not in st.session_state or not st.session_state.sample_cv_content:
+                    if (('sample_cv_parsed' not in st.session_state or not st.session_state.sample_cv_parsed) and 
+                        ('sample_cv_content' not in st.session_state or not st.session_state.sample_cv_content)):
                         st.warning("⚠️ Please upload a Sample CV first to auto-fill contact information")
                     else:
                         with st.spinner("📋 Extracting contact information from Sample CV..."):
@@ -677,6 +687,16 @@ def display_extracted_content(processed_data):
             title = document_titles.get(doc_type, doc_type.replace('_', ' ').title())
             
             with st.expander(f"{title} - Click to expand", expanded=False):
+                # Add JSON view button for sample CV if parsed data is available
+                if doc_type == "sample_cv" and st.session_state.get('sample_cv_parsed'):
+                    button_cols = st.columns([1, 3])
+                    with button_cols[0]:
+                        if st.button("📋 View JSON Data", key=f"json_view_{doc_type}", 
+                                   help="View parsed Sample CV data in JSON format"):
+                            show_sample_cv_data_json()
+                    with button_cols[1]:
+                        st.info("✅ Sample CV has been parsed into structured format")
+                
                 # Format content with proper structure
                 formatted_content = format_content_with_structure(content, doc_type)
                 st.markdown(formatted_content)
@@ -756,8 +776,39 @@ def clean_generated_content(content: str) -> str:
     return '\n'.join(cleaned_lines)
 
 def extract_contact_info_from_cv(llm_service):
-    """Extract contact information from Sample CV using LLM"""
+    """Extract contact information from Sample CV using structured JSON data"""
     
+    # Check if we have parsed sample CV JSON data
+    if ('sample_cv_parsed' in st.session_state and st.session_state.sample_cv_parsed and 
+        'sample_cv_json' in st.session_state):
+        
+        try:
+            # Use the structured JSON data from the sample CV parser
+            cv_data = st.session_state.sample_cv_json
+            contact_data = cv_data.get('contact', {})
+            
+            # Convert to the expected format
+            contact_info = {
+                'name': contact_data.get('name', ''),
+                'email': contact_data.get('email', ''),
+                'phone': contact_data.get('phone', ''),
+                'location': contact_data.get('location', ''),
+                'linkedin': contact_data.get('linkedin', ''),
+                'website': contact_data.get('website', '')
+            }
+            
+            # Clean up "Not specified" values to empty strings for better UX
+            for key, value in contact_info.items():
+                if isinstance(value, str) and value.lower() in ['not specified', 'not found', 'n/a', 'none']:
+                    contact_info[key] = ""
+            
+            return contact_info
+            
+        except Exception as e:
+            st.error(f"Error extracting contact information from parsed CV: {str(e)}")
+            return None
+    
+    # Fallback to raw CV content if structured data is not available
     if 'sample_cv_content' not in st.session_state or not st.session_state.sample_cv_content:
         return None
     
@@ -2617,6 +2668,93 @@ def show_cv_data_json():
     except Exception as e:
         logger.error(f"CV data JSON display error: {e}")
         st.error(f"❌ Error displaying CV data: {str(e)}")
+
+def show_sample_cv_data_json():
+    """Display Sample CV parsed data in JSON format for inspection"""
+    import json
+    
+    try:
+        # Check if we have parsed sample CV data
+        if not st.session_state.get('sample_cv_parsed') or not st.session_state.get('sample_cv_json'):
+            st.warning("⚠️ No parsed Sample CV data available. Please upload and parse a Sample CV first.")
+            return
+        
+        # Get the parsed sample CV data
+        sample_cv_data = st.session_state.sample_cv_json
+        
+        # Create formatted JSON string
+        json_str = json.dumps(sample_cv_data, indent=2, ensure_ascii=False)
+        
+        # Display in expandable sections for better organization
+        st.subheader("📋 Sample CV Data Structure (JSON Format)")
+        
+        # Show basic stats
+        stats_col1, stats_col2, stats_col3 = st.columns(3)
+        with stats_col1:
+            exp_count = len(sample_cv_data.get('experience', []))
+            st.metric("Experience Entries", exp_count)
+        with stats_col2:
+            skills_count = len(sample_cv_data.get('skills', []))
+            st.metric("Skills Count", skills_count)
+        with stats_col3:
+            st.metric("Data Size", f"{len(json_str)} chars")
+        
+        # Create tabs for different data views
+        tab1, tab2, tab3 = st.tabs(["🔍 Structured View", "📄 Raw JSON", "💾 Download"])
+        
+        with tab1:
+            # Structured view with expandable sections
+            st.write("**Contact Information:**")
+            contact_json = json.dumps(sample_cv_data.get('contact', {}), indent=2, ensure_ascii=False)
+            st.code(contact_json, language="json")
+            
+            st.write("**Professional Summary:**")
+            summary = sample_cv_data.get('professional_summary', '')
+            st.code(f'"{summary}"', language="json")
+            
+            st.write("**Skills:**")
+            skills_json = json.dumps(sample_cv_data.get('skills', []), indent=2, ensure_ascii=False)
+            st.code(skills_json, language="json")
+            
+            experience_data = sample_cv_data.get('experience', [])
+            if experience_data:
+                st.write("**Experience (First Entry Preview):**")
+                exp_preview = experience_data[0] if experience_data else {}
+                exp_json = json.dumps(exp_preview, indent=2, ensure_ascii=False)
+                st.code(exp_json, language="json")
+                
+                if len(experience_data) > 1:
+                    st.info(f"📝 Showing 1 of {len(experience_data)} experience entries. View full JSON in 'Raw JSON' tab.")
+        
+        with tab2:
+            # Full JSON view
+            st.write("**Complete Sample CV Data Structure:**")
+            st.code(json_str, language="json")
+        
+        with tab3:
+            # Download options
+            st.write("**Download Sample CV Data:**")
+            
+            # Create download button for JSON
+            import base64
+            json_bytes = json_str.encode('utf-8')
+            b64_json = base64.b64encode(json_bytes).decode()
+            
+            contact_name = sample_cv_data.get('contact', {}).get('name', 'sample').replace(' ', '_').lower()
+            filename = f"sample_cv_data_{contact_name}.json"
+            download_link = f'<a href="data:application/json;base64,{b64_json}" download="{filename}">📄 Download Sample CV Data as JSON</a>'
+            
+            st.markdown(download_link, unsafe_allow_html=True)
+            
+            st.info(f"📊 **Sample CV Data Summary:**\n"
+                   f"- Contact: {sample_cv_data.get('contact', {}).get('name', 'Not specified')} ({sample_cv_data.get('contact', {}).get('email', 'Not specified')})\n"
+                   f"- Experience entries: {len(sample_cv_data.get('experience', []))}\n"
+                   f"- Skills: {len(sample_cv_data.get('skills', []))}\n"
+                   f"- Professional summary: {len(sample_cv_data.get('professional_summary', ''))} characters")
+        
+    except Exception as e:
+        logger.error(f"Sample CV data JSON display error: {e}")
+        st.error(f"❌ Error displaying Sample CV data: {str(e)}")
 
 def generate_cv_pdf_structured():
     """Generate CV PDF using HTML-to-PDF converter to match CV preview exactly"""
