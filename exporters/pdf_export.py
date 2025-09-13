@@ -846,15 +846,16 @@ class PDFExporter:
             leftIndent=0
         )
         
-        # Job header - for job titles
+        # Job header - for job titles (LinkedIn-style: bold and larger)
         styles['JobHeader'] = ParagraphStyle(
             'JobHeader',
             parent=self.styles['Normal'],
-            fontSize=11,
+            fontSize=13,
+            fontName='Helvetica-Bold',
             textColor=black,
             spaceBefore=0,
             spaceAfter=2,
-            leading=14
+            leading=16
         )
         
         # Company/location text
@@ -890,16 +891,17 @@ class PDFExporter:
             leading=12
         )
         
-        # Job titles for previous roles (same as JobHeader for consistency)
+        # Job titles for previous roles (LinkedIn-style: bold and larger, same as JobHeader)
         styles['JobTitle'] = ParagraphStyle(
             'JobTitle',
             parent=self.styles['Normal'],
-            fontSize=11,
+            fontSize=13,
+            fontName='Helvetica-Bold',
             textColor=black,
             spaceBefore=12,
             spaceAfter=2,
             leftIndent=0,
-            leading=14
+            leading=16
         )
         
         return styles
@@ -1043,7 +1045,7 @@ class PDFExporter:
                     from reportlab.platypus import Table, TableStyle
                     
                     job_header_data = [[
-                        Paragraph(f"<b>{job_title}</b>", styles['JobHeader']),
+                        Paragraph(job_title, styles['JobHeader']),
                         Paragraph(dates, styles['DateText'])
                     ]]
                     
@@ -1243,7 +1245,7 @@ class PDFExporter:
                     
                     # LinkedIn-style: Bold job title on left, dates on right
                     job_header_data = [[
-                        Paragraph(f"<b>{current_role}</b>", styles['JobTitle']),
+                        Paragraph(current_role, styles['JobTitle']),
                         Paragraph(dates, styles['DateText'])
                     ]]
                     
