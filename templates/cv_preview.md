@@ -18,15 +18,15 @@
 
 ## **PROFESSIONAL EXPERIENCE**
 
-### **{{ current_role.position_name }}** | {{ current_role.company_name }}, {{ current_role.location }} | {{ current_role.start_date }} - {{ current_role.end_date }} ({{ current_role.work_duration }})
+### **{{ current_role.job_title }}** | {{ current_role.company }}, {{ current_role.location }} | {{ current_role.start_date }} - {{ current_role.end_date }}
 
-{% for bullet in current_role.key_bullets %}• {{ bullet }}
+{% for bullet in current_role.bullets %}• {{ bullet.to_formatted_string() }}
 {% endfor %}
 {% if previous_roles %}
 {% for role in previous_roles %}
-### **{{ role.position_name }}** | {{ role.company_name }}, {{ role.location }} | {{ role.start_date }} - {{ role.end_date }} ({{ role.work_duration }})
+### **{{ role.job_title }}** | {{ role.company }}, {{ role.location }} | {{ role.start_date }} - {{ role.end_date }}
 
-{% for bullet in role.key_bullets %}• {{ bullet }}
+{% for bullet in role.bullets %}• {{ bullet.to_formatted_string() }}
 {% endfor %}
 {% endfor %}
 {% endif %}

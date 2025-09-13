@@ -561,6 +561,11 @@ class PDFExporter:
         
         return " | ".join(parts)
     
+    def _create_contact_header(self, contact_info: Dict[str, str], style) -> Paragraph:
+        """Create contact header as a Paragraph object"""
+        contact_text = self._format_contact_header(contact_info)
+        return Paragraph(contact_text, style)
+    
     def _parse_professional_cv_sections(self, cv_content: str) -> Dict[str, str]:
         """Parse the professionally formatted CV content with enhanced validation"""
         sections = {}
@@ -1550,14 +1555,14 @@ class PDFExporter:
             
             # Add professional summary
             if cv_data.professional_summary:
-                story.append(Paragraph("PROFESSIONAL SUMMARY", styles['SectionHeader']))
+                story.append(Paragraph("PROFESSIONAL SUMMARY", styles['CVHeading']))
                 story.append(Spacer(1, 8))
                 story.append(Paragraph(cv_data.professional_summary, styles['BodyText']))
                 story.append(Spacer(1, 15))
             
             # Add skills
             if cv_data.skills:
-                story.append(Paragraph("CORE SKILLS", styles['SectionHeader']))
+                story.append(Paragraph("CORE SKILLS", styles['CVHeading']))
                 story.append(Spacer(1, 8))
                 
                 # Format skills in rows of 4
@@ -1573,7 +1578,7 @@ class PDFExporter:
             
             # Add current role
             if cv_data.current_role:
-                story.append(Paragraph("PROFESSIONAL EXPERIENCE", styles['SectionHeader']))
+                story.append(Paragraph("PROFESSIONAL EXPERIENCE", styles['CVHeading']))
                 story.append(Spacer(1, 8))
                 
                 # Role header
