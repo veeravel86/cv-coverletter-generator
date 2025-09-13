@@ -42,50 +42,62 @@ class TemplateEngine:
         text = text.replace("*", "")
         return text.strip()
     
+    def _create_unified_context(self, cv_data: CVData) -> Dict[str, Any]:
+        """Create unified context for both preview and PDF templates"""
+        context = {
+            'contact': {
+                'name': cv_data.contact.name,
+                'email': cv_data.contact.email,
+                'phone': cv_data.contact.phone,
+                'location': cv_data.contact.location,
+                'linkedin': cv_data.contact.linkedin,
+                'website': cv_data.contact.website
+            },
+            'professional_summary': cv_data.professional_summary,
+            'skills': cv_data.skills,
+            'current_role': {
+                'job_title': cv_data.current_role.job_title,
+                'company': cv_data.current_role.company,
+                'location': cv_data.current_role.location,
+                'start_date': cv_data.current_role.start_date,
+                'end_date': cv_data.current_role.end_date,
+                'work_duration': f"{cv_data.current_role.start_date} - {cv_data.current_role.end_date}",
+                'bullets': cv_data.current_role.bullets,
+                # Also provide PDF-compatible fields
+                'position_name': cv_data.current_role.job_title,
+                'company_name': cv_data.current_role.company,
+                'key_bullets': [bullet.to_formatted_string() for bullet in cv_data.current_role.bullets]
+            },
+            'previous_roles': [],
+            'additional_info': cv_data.additional_info,
+            'generated_at': cv_data.generated_at or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        # Add previous roles with both field name formats
+        if cv_data.previous_roles:
+            for role in cv_data.previous_roles:
+                role_data = {
+                    'job_title': role.job_title,
+                    'company': role.company,
+                    'location': role.location,
+                    'start_date': role.start_date,
+                    'end_date': role.end_date,
+                    'work_duration': f"{role.start_date} - {role.end_date}",
+                    'bullets': role.bullets,
+                    # Also provide PDF-compatible fields
+                    'position_name': role.job_title,
+                    'company_name': role.company,
+                    'key_bullets': [bullet.to_formatted_string() for bullet in role.bullets]
+                }
+                context['previous_roles'].append(role_data)
+        
+        return context
+    
     def render_cv_preview(self, cv_data: CVData) -> str:
         """Render CV preview using markdown template"""
         try:
             template = self.env.get_template('cv_preview.md')
-            
-            # Prepare template context
-            context = {
-                'contact': {
-                    'name': cv_data.contact.name,
-                    'email': cv_data.contact.email,
-                    'phone': cv_data.contact.phone,
-                    'location': cv_data.contact.location,
-                    'linkedin': cv_data.contact.linkedin,
-                    'website': cv_data.contact.website
-                },
-                'professional_summary': cv_data.professional_summary,
-                'skills': cv_data.skills,
-                'current_role': {
-                    'job_title': cv_data.current_role.job_title,
-                    'company': cv_data.current_role.company,
-                    'location': cv_data.current_role.location,
-                    'start_date': cv_data.current_role.start_date,
-                    'end_date': cv_data.current_role.end_date,
-                    'work_duration': f"{cv_data.current_role.start_date} - {cv_data.current_role.end_date}",
-                    'bullets': cv_data.current_role.bullets
-                },
-                'previous_roles': [],
-                'additional_info': cv_data.additional_info,
-                'generated_at': cv_data.generated_at or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
-            
-            # Add previous roles if available
-            if cv_data.previous_roles:
-                for role in cv_data.previous_roles:
-                    context['previous_roles'].append({
-                        'job_title': role.job_title,
-                        'company': role.company,
-                        'location': role.location,
-                        'start_date': role.start_date,
-                        'end_date': role.end_date,
-                        'work_duration': f"{role.start_date} - {role.end_date}",
-                        'bullets': role.bullets
-                    })
-            
+            context = self._create_unified_context(cv_data)
             return template.render(**context)
             
         except Exception as e:
@@ -95,46 +107,7 @@ class TemplateEngine:
         """Render CV for PDF generation (clean text, no markdown)"""
         try:
             template = self.env.get_template('cv_pdf.txt')
-            
-            # Prepare template context (same as preview but clean output)
-            context = {
-                'contact': {
-                    'name': cv_data.contact.name,
-                    'email': cv_data.contact.email,
-                    'phone': cv_data.contact.phone,
-                    'location': cv_data.contact.location,
-                    'linkedin': cv_data.contact.linkedin,
-                    'website': cv_data.contact.website
-                },
-                'professional_summary': cv_data.professional_summary,
-                'skills': cv_data.skills,
-                'current_role': {
-                    'position_name': cv_data.current_role.job_title,
-                    'company_name': cv_data.current_role.company,
-                    'location': cv_data.current_role.location,
-                    'start_date': cv_data.current_role.start_date,
-                    'end_date': cv_data.current_role.end_date,
-                    'work_duration': f"{cv_data.current_role.start_date} - {cv_data.current_role.end_date}",
-                    'key_bullets': [bullet.to_formatted_string() for bullet in cv_data.current_role.bullets]
-                },
-                'previous_roles': [],
-                'additional_info': cv_data.additional_info,
-                'generated_at': cv_data.generated_at or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
-            
-            # Add previous roles if available
-            if cv_data.previous_roles:
-                for role in cv_data.previous_roles:
-                    context['previous_roles'].append({
-                        'position_name': role.job_title,
-                        'company_name': role.company,
-                        'location': role.location,
-                        'start_date': role.start_date,
-                        'end_date': role.end_date,
-                        'work_duration': f"{role.start_date} - {role.end_date}",
-                        'key_bullets': [bullet.to_formatted_string() for bullet in role.bullets]
-                    })
-            
+            context = self._create_unified_context(cv_data)
             return template.render(**context)
             
         except Exception as e:
