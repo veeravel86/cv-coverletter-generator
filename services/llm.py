@@ -109,6 +109,14 @@ class OpenAILLMService:
             openai_api_key=api_key
         )
     
+    def _get_model_compatible_params(self, model: str, max_tokens: int) -> Dict[str, Any]:
+        """Get model-compatible parameters for OpenAI API calls"""
+        # GPT-5 and newer models use max_completion_tokens
+        if model in ["gpt-5"]:
+            return {"max_completion_tokens": max_tokens}
+        else:
+            return {"max_tokens": max_tokens}
+    
     def _make_request_with_retry(self, messages: List[Dict[str, str]], system_prompt: str = None) -> str:
         for attempt in range(self.config.retry_attempts):
             try:
@@ -118,11 +126,14 @@ class OpenAILLMService:
                 
                 formatted_messages.extend(messages)
                 
+                # Get model-compatible parameters
+                token_params = self._get_model_compatible_params(self.config.model.value, self.config.max_tokens)
+                
                 response = self.client.chat.completions.create(
                     model=self.config.model.value,
                     messages=formatted_messages,
                     temperature=self.config.temperature,
-                    max_tokens=self.config.max_tokens
+                    **token_params
                 )
                 
                 return response.choices[0].message.content.strip()

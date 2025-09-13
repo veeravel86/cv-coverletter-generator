@@ -29,6 +29,14 @@ class SummaryGenerator:
         self.config = config or SummaryGenerationConfig()
         self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     
+    def _get_model_compatible_params(self, model: str, max_tokens: int) -> Dict[str, Any]:
+        """Get model-compatible parameters for OpenAI API calls"""
+        # GPT-5 and newer models use max_completion_tokens
+        if model in ["gpt-5"]:
+            return {"max_completion_tokens": max_tokens}
+        else:
+            return {"max_tokens": max_tokens}
+    
     def generate_professional_summary(self, job_description: str, experience_superset: str, 
                                     skills_superset: str = None) -> Dict[str, Any]:
         """Generate executive-level professional summary ≤30 words"""
@@ -42,6 +50,9 @@ class SummaryGenerator:
             system_prompt = self._create_summary_system_prompt()
             user_prompt = self._create_summary_user_prompt(job_description, candidate_background)
             
+            # Get model-compatible parameters
+            token_params = self._get_model_compatible_params(self.config.model, self.config.max_tokens)
+            
             response = self.openai_client.chat.completions.create(
                 model=self.config.model,
                 messages=[
@@ -49,7 +60,7 @@ class SummaryGenerator:
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens
+                **token_params
             )
             
             raw_summary = response.choices[0].message.content.strip()

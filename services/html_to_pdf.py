@@ -139,7 +139,7 @@ class HTMLToPDFConverter:
         .cv-container {
             max-width: 8.5in;
             margin: 0 auto;
-            padding: 0.4in;
+            padding: 0.25in;
             background: white;
         }
         
@@ -159,7 +159,7 @@ class HTMLToPDFConverter:
             text-align: center;
             margin-bottom: 16pt;
             color: #555;
-            font-size: 10pt;
+            font-size: 8pt;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -273,9 +273,18 @@ class HTMLToPDFConverter:
             left: 0;
         }
         
-        /* Bold headers in bullets */
+        /* Bold headers in bullets - shaded like skill tags */
         li strong {
+            background: #ecf0f1;
             color: #2c3e50;
+            padding: 2pt 6pt;
+            border-radius: 6pt;
+            font-size: 9pt;
+            font-weight: bold;
+            display: inline-block;
+            border: 1px solid #bdc3c7;
+            box-shadow: 0 1pt 2pt rgba(0,0,0,0.1);
+            margin-right: 6pt;
         }
         
         /* Tables */
@@ -306,7 +315,7 @@ class HTMLToPDFConverter:
         @media print {
             .cv-container {
                 margin: 0;
-                padding: 0.3in;
+                padding: 0.2in;
                 box-shadow: none;
             }
             

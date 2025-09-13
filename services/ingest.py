@@ -28,6 +28,14 @@ class PDFIngestor:
         )
         self.vector_store: Optional[FAISS] = None
         self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    
+    def _get_model_compatible_params(self, model: str, max_tokens: int) -> Dict[str, Any]:
+        """Get model-compatible parameters for OpenAI API calls"""
+        # GPT-5 and newer models use max_completion_tokens
+        if model in ["gpt-5"]:
+            return {"max_completion_tokens": max_tokens}
+        else:
+            return {"max_tokens": max_tokens}
         
     def extract_text_from_pdf(self, pdf_file) -> str:
         try:
@@ -100,14 +108,17 @@ If no clear job description is found, return "NO JOB DESCRIPTION FOUND".
 Raw LinkedIn export text to process:
 """
 
+            model = "gpt-4o-mini"
+            token_params = self._get_model_compatible_params(model, 4000)
+            
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {"role": "system", "content": "You are a specialized text extraction expert. Your job is to extract ONLY pure job description content from noisy LinkedIn page exports. Be extremely thorough in removing LinkedIn interface noise while preserving all job-relevant information."},
                     {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
                 ],
                 temperature=0.0,  # Use 0.0 for more consistent extraction
-                max_tokens=4000  # Increased for longer job descriptions
+                **token_params
             )
             
             extracted_content = response.choices[0].message.content.strip()
@@ -158,14 +169,17 @@ VERIFICATION: After formatting, ensure every piece of information from the origi
 Raw CV text to process:
 """
 
+            model = "gpt-4o-mini"
+            token_params = self._get_model_compatible_params(model, 4000)
+            
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {"role": "system", "content": "You are a formatting assistant. Your only job is to organize content under headings without changing, removing, or modifying any information. Preserve all content exactly as provided."},
                     {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
                 ],
                 temperature=0.0,  # Reduced for more consistent formatting
-                max_tokens=4000
+                **token_params
             )
             
             structured_content = response.choices[0].message.content.strip()
@@ -226,14 +240,17 @@ MANDATORY VERIFICATION: After formatting, verify that EVERY single piece of expe
 Raw experience text to process:
 """
 
+            model = "gpt-4o-mini"
+            token_params = self._get_model_compatible_params(model, 4000)
+            
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {"role": "system", "content": "You are a formatting assistant. Your ONLY job is to organize content while preserving ALL existing headings and content EXACTLY as written. Do not change, remove, or modify any content - only organize it while maintaining original structure and headings."},
                     {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
                 ],
                 temperature=0.0,  # Set to 0 for maximum consistency
-                max_tokens=4000
+                **token_params
             )
             
             structured_content = response.choices[0].message.content.strip()
@@ -286,14 +303,17 @@ MANDATORY VERIFICATION: After formatting, verify that EVERY single skill, techno
 Raw skills text to process:
 """
 
+            model = "gpt-4o-mini"
+            token_params = self._get_model_compatible_params(model, 4000)
+            
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {"role": "system", "content": "You are a formatting assistant. Your ONLY job is to organize content under headings. You must preserve ALL information exactly as provided. Do not change, remove, or modify any content - only organize it under appropriate headings."},
                     {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
                 ],
                 temperature=0.0,  # Set to 0 for maximum consistency
-                max_tokens=4000
+                **token_params
             )
             
             structured_content = response.choices[0].message.content.strip()
@@ -338,14 +358,17 @@ FORMATTING:
 Raw experience text to process:
 """
 
+            model = "gpt-4o-mini"
+            token_params = self._get_model_compatible_params(model, 4000)
+            
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {"role": "system", "content": "You are a formatting assistant. Organize work experience content under headings without changing any information. Preserve all content exactly as provided."},
                     {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
                 ],
                 temperature=0.0,
-                max_tokens=4000
+                **token_params
             )
             
             structured_content = response.choices[0].message.content.strip()
@@ -388,14 +411,17 @@ FORMATTING:
 Raw skills text to process:
 """
 
+            model = "gpt-4o-mini"
+            token_params = self._get_model_compatible_params(model, 4000)
+            
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {"role": "system", "content": "You are a formatting assistant. Organize skills content under headings without changing any information. Preserve all content exactly as provided."},
                     {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
                 ],
                 temperature=0.0,
-                max_tokens=4000
+                **token_params
             )
             
             structured_content = response.choices[0].message.content.strip()
