@@ -60,13 +60,13 @@ class TemplateEngine:
                 'professional_summary': cv_data.professional_summary,
                 'skills': cv_data.skills,
                 'current_role': {
-                    'position_name': cv_data.current_role.job_title,
-                    'company_name': cv_data.current_role.company,
+                    'job_title': cv_data.current_role.job_title,
+                    'company': cv_data.current_role.company,
                     'location': cv_data.current_role.location,
                     'start_date': cv_data.current_role.start_date,
                     'end_date': cv_data.current_role.end_date,
                     'work_duration': f"{cv_data.current_role.start_date} - {cv_data.current_role.end_date}",
-                    'key_bullets': [bullet.to_formatted_string() for bullet in cv_data.current_role.bullets]
+                    'bullets': cv_data.current_role.bullets
                 },
                 'previous_roles': [],
                 'additional_info': cv_data.additional_info,
@@ -77,13 +77,13 @@ class TemplateEngine:
             if cv_data.previous_roles:
                 for role in cv_data.previous_roles:
                     context['previous_roles'].append({
-                        'position_name': role.job_title,
-                        'company_name': role.company,
+                        'job_title': role.job_title,
+                        'company': role.company,
                         'location': role.location,
                         'start_date': role.start_date,
                         'end_date': role.end_date,
                         'work_duration': f"{role.start_date} - {role.end_date}",
-                        'key_bullets': [bullet.to_formatted_string() for bullet in role.bullets]
+                        'bullets': role.bullets
                     })
             
             return template.render(**context)
