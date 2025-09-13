@@ -18,6 +18,7 @@ from exporters.pdf_export import get_pdf_exporter
 from utils.text import TextProcessor, ContentValidator
 from utils.style import StyleApplicator
 from models.cv_data import CVData, ContactInfo, RoleExperience, ExperienceBullet
+from services.template_engine import template_engine
 
 load_dotenv()
 
@@ -1320,7 +1321,7 @@ BEGIN."""
             st.error(f"❌ Error generating executive summary: {str(e)}")
 
 def generate_previous_experience_summary(llm_service, context_builder):
-    """Generate previous experience summary by parsing sample CV and extracting only past experiences"""
+    """Generate previous experience summary with structured JSON format for multiple positions"""
     
     with st.spinner("📋 Generating previous experience summary..."):
         try:
@@ -1332,104 +1333,164 @@ def generate_previous_experience_summary(llm_service, context_builder):
             # Get sample CV content for experience extraction
             sample_cv_content = st.session_state.sample_cv_content
             
-            # First LLM call to strictly extract experience sections from sample CV
-            extraction_prompt = f"""
-You are a strict content extractor. Extract ONLY the work experience/employment history section from the CV exactly as it appears.
+            # First LLM call: Extract previous roles data in JSON format with strict guardrails
+            extraction_prompt = f"""You are a CV data extraction specialist. Extract ONLY previous/past work experiences from the CV (exclude current/most recent role).
 
 CV CONTENT:
 {sample_cv_content}
 
-STRICT EXTRACTION RULES:
-1. Find the work experience/employment/professional experience section
-2. Copy the EXACT text as it appears in the CV - word for word
-3. Include job titles, company names, dates, and descriptions exactly as written
-4. Do NOT rephrase, summarize, or modify any content
-5. Do NOT add information that isn't explicitly in the CV
-6. Maintain original formatting, bullet points, and structure
-7. If no work experience section exists, return "No work experience section found"
+CRITICAL EXTRACTION RULES:
+1. EXTRACT ONLY - Do not create, generate, or hallucinate any information
+2. Include ONLY previous/past positions (exclude current/most recent role)
+3. Extract exact job titles, company names, and dates as written in CV
+4. Calculate work duration for each role (e.g., "2 years 3 months")
+5. Extract 2-4 key achievements/responsibilities per role EXACTLY as written
+6. If no previous roles exist, return {{"previous_roles_data": []}}
+7. Preserve original wording and content from CV
 
-WHAT TO EXTRACT:
-- Section headers exactly as written
-- Job titles exactly as written  
-- Company names exactly as written
-- Employment dates exactly as written
-- All bullet points and descriptions exactly as written
+STRICT GUARDRAILS:
+❌ Do NOT create fictional positions
+❌ Do NOT add achievements not in the CV
+❌ Do NOT rephrase or improve content
+❌ Do NOT include current/most recent role
+❌ Do NOT infer information not explicitly stated
 
-WHAT NOT TO DO:
-- Do not create or generate new content
-- Do not rephrase or improve the text
-- Do not add achievements not mentioned
-- Do not infer information
+✅ DO extract exact text from CV
+✅ DO maintain original company names
+✅ DO preserve exact job titles
+✅ DO calculate accurate work durations
 
-OUTPUT FORMAT:
-Return the exact work experience section text as it appears in the CV, with no modifications.
-"""
+OUTPUT FORMAT (JSON):
+{{
+  "previous_roles_data": [
+    {{
+      "position_name": "exact job title from CV",
+      "company_name": "exact company name from CV",
+      "location": "work location from CV (city, state/country)",
+      "start_date": "start date (format: MMM YYYY)",
+      "end_date": "end date (format: MMM YYYY)",
+      "work_duration": "calculated duration (e.g., '2 years 3 months')",
+      "key_bullets": [
+        "achievement/responsibility 1 exactly as written",
+        "achievement/responsibility 2 exactly as written",
+        "achievement/responsibility 3 exactly as written"
+      ]
+    }}
+  ]
+}}
+
+VALIDATION CHECK: Ensure every field comes directly from the CV content. Do not fabricate any information."""
             
-            extracted_experience = llm_service.generate_content(extraction_prompt, max_tokens=3000)
+            # Generate structured role data
+            roles_response = llm_service.generate_content(extraction_prompt, max_tokens=3500)
             
-            # Second LLM call to strictly extract only previous (non-current) roles
-            extraction_prompt_strict = f"""
-You are a strict content extractor. Your job is to EXTRACT (not create or summarize) ONLY the previous/past work experiences from the given content.
-
-WORK EXPERIENCE CONTENT:
-{extracted_experience}
-
-STRICT REQUIREMENTS:
-1. EXTRACT ONLY - Do not create, generate, or summarize any content
-2. Copy the exact text as it appears in the CV
-3. Exclude the current/most recent role (typically the first entry)
-4. Include ONLY previous/past positions that are explicitly mentioned
-5. Preserve original wording, dates, companies, and descriptions exactly as written
-6. If there are no previous roles mentioned, return "No previous roles found in the sample CV"
-
-WHAT TO EXTRACT:
-- Job titles exactly as written
-- Company names exactly as written  
-- Employment dates exactly as written
-- Bullet points exactly as written
-- Any other details exactly as they appear
-
-WHAT NOT TO DO:
-- Do not add information not present in the CV
-- Do not rephrase or rewrite content
-- Do not create new achievements or responsibilities
-- Do not infer or assume information
-- Do not summarize or condense content
-- Do not add quantified results unless explicitly stated in the CV
-
-OUTPUT FORMAT:
-Return only the previous work experience entries exactly as they appear in the original CV content, excluding the most recent/current role.
-"""
-            
-            response = llm_service.generate_content(extraction_prompt_strict, max_tokens=2500)
-            
-            # Validation step: Check if extracted content contains information from the original CV
-            if response and "No previous roles found" not in response:
-                # Simple validation: check if the extracted content contains at least some words from original CV
-                original_words = set(sample_cv_content.lower().split())
-                response_words = set(response.lower().split())
+            # Parse JSON and validate
+            try:
+                import json
+                roles_data = json.loads(roles_response)
                 
-                # Check overlap percentage (should be high for genuine extraction)
-                common_words = original_words.intersection(response_words)
-                if len(response_words) > 0:
-                    overlap_percentage = len(common_words) / len(response_words)
+                # Validate structure
+                if 'previous_roles_data' not in roles_data:
+                    st.warning("⚠️ Invalid JSON structure returned by LLM")
+                    return
+                
+                previous_roles = roles_data['previous_roles_data']
+                
+                if not previous_roles:
+                    st.info("ℹ️ No previous roles found in sample CV")
+                    return
+                
+                # Second LLM call: Generate optimized bullets for each role
+                optimized_roles = []
+                
+                for role in previous_roles:
+                    role_name = role.get('position_name', 'Unknown Position')
+                    company = role.get('company_name', 'Unknown Company')
+                    bullets = role.get('key_bullets', [])
                     
-                    if overlap_percentage < 0.3:  # Less than 30% overlap suggests hallucination
-                        st.warning("⚠️ Detected potential content generation. Using direct extraction from Sample CV instead.")
-                        # Fallback: Use a more conservative approach
-                        response = "Previous roles extracted directly from Sample CV - manual review recommended for accuracy."
-                        st.info("💡 Tip: The generated previous roles may contain created content. Please verify against your Sample CV.")
-                    else:
-                        st.info(f"✅ Content validation passed ({overlap_percentage:.1%} overlap with original CV)")
-            
-            # Store in session state
-            if 'individual_generations' not in st.session_state:
-                st.session_state.individual_generations = {}
-            st.session_state.individual_generations['previous_experience'] = response
-            
-            st.success("✅ Previous Experience Summary generated successfully!")
-            st.info("👁️ View your generated content in the 'Generated Individual Sections' below")
-            
+                    if bullets:
+                        bullet_prompt = f"""You are an expert CV writer. Transform the following work experience bullets into professional SAR (Situation-Action-Result) format.
+
+ROLE CONTEXT:
+Position: {role_name}
+Company: {company}
+
+ORIGINAL BULLETS:
+{chr(10).join(bullets)}
+
+OPTIMIZATION RULES:
+1. Use SAR format: Situation | Action | Result
+2. Start with 2-word bold heading: **Action Verb + Focus**
+3. Include quantified results when possible
+4. Keep each bullet under 25 words
+5. Use impactful action verbs
+6. Maintain professional tone
+
+FORMATTING:
+- Format: **Heading** | SAR content
+- Example: **System Design** | Architected microservices platform that reduced deployment time by 60% and improved system reliability for 50k+ users
+
+OUTPUT FORMAT (JSON):
+{{
+  "optimized_bullets": [
+    "**First Action** | Professional SAR format bullet 1",
+    "**Second Action** | Professional SAR format bullet 2",
+    "**Third Action** | Professional SAR format bullet 3"
+  ]
+}}"""
+                        
+                        bullet_response = llm_service.generate_content(bullet_prompt, max_tokens=1500)
+                        
+                        try:
+                            bullet_data = json.loads(bullet_response)
+                            optimized_bullets = bullet_data.get('optimized_bullets', bullets)
+                        except json.JSONDecodeError:
+                            st.warning(f"⚠️ JSON parsing failed for {role_name} bullets, using original")
+                            optimized_bullets = bullets
+                        
+                        # Update role with optimized bullets
+                        role['key_bullets'] = optimized_bullets
+                    
+                    optimized_roles.append(role)
+                
+                # Create formatted output for display
+                formatted_sections = []
+                for role in optimized_roles:
+                    role_header = f"**{role.get('position_name', 'Unknown Position')}** | {role.get('company_name', 'Unknown Company')}, {role.get('location', 'Unknown Location')} | {role.get('start_date', '')} - {role.get('end_date', '')} ({role.get('work_duration', '')})"
+                    formatted_sections.append(role_header)
+                    
+                    for bullet in role.get('key_bullets', []):
+                        formatted_sections.append(f"• {bullet}")
+                    formatted_sections.append("")  # Add spacing
+                
+                formatted_response = '\n'.join(formatted_sections).strip()
+                
+                # Store both formatted text and structured JSON
+                if 'individual_generations' not in st.session_state:
+                    st.session_state.individual_generations = {}
+                if 'llm_json_responses' not in st.session_state:
+                    st.session_state.llm_json_responses = {}
+                
+                st.session_state.individual_generations['previous_experience'] = formatted_response
+                st.session_state.llm_json_responses['previous_experience'] = {'previous_roles_data': optimized_roles}
+                
+                st.success(f"✅ Previous Experience Summary generated successfully! ({len(optimized_roles)} roles processed)")
+                st.info("👁️ View your generated content in the 'Generated Individual Sections' below")
+                
+            except json.JSONDecodeError as e:
+                st.error(f"❌ Failed to parse LLM JSON response: {str(e)}")
+                st.warning("🔧 Falling back to text extraction method")
+                
+                # Fallback: use original text extraction
+                fallback_response = llm_service.generate_content(
+                    f"Extract previous work experience from CV (exclude current role): {sample_cv_content}",
+                    max_tokens=2000
+                )
+                
+                if 'individual_generations' not in st.session_state:
+                    st.session_state.individual_generations = {}
+                st.session_state.individual_generations['previous_experience'] = fallback_response
+                
         except Exception as e:
             st.error(f"❌ Error generating previous experience summary: {str(e)}")
 
@@ -2186,7 +2247,7 @@ def convert_session_to_cvdata() -> CVData:
     return cv_data
 
 def show_cv_preview_structured():
-    """Display CV preview using structured CVData format"""
+    """Display CV preview using Jinja2 template engine"""
     
     # Check if we have sufficient data
     if not st.session_state.get('whole_cv_contact') or not st.session_state.get('individual_generations'):
@@ -2194,33 +2255,59 @@ def show_cv_preview_structured():
         return
     
     try:
-        # Convert session data to structured format
-        cv_data = convert_session_to_cvdata()
+        # Option 1: Use structured CVData if available
+        try:
+            cv_data = convert_session_to_cvdata()
+            formatted_cv = template_engine.render_cv_preview(cv_data)
+            template_source = "CVData + Jinja2 Template"
+        except Exception as cvdata_error:
+            logger.warning(f"CVData conversion failed: {cvdata_error}, using session data directly")
+            # Option 2: Fallback to session data rendering
+            contact_info = st.session_state.get('whole_cv_contact', {})
+            session_data = {
+                'llm_json_responses': st.session_state.get('llm_json_responses', {}),
+                'individual_generations': st.session_state.get('individual_generations', {})
+            }
+            formatted_cv = template_engine.render_cv_from_session_data(session_data, contact_info)
+            template_source = "Session Data + Jinja2 Template"
         
-        with st.expander("👁️ Complete CV Preview (Structured) - Click to expand", expanded=True):
+        with st.expander("👁️ Complete CV Preview (Template Engine) - Click to expand", expanded=True):
             st.markdown("### 📄 Generated CV Preview")
-            st.markdown("*Review your complete CV using structured data format*")
+            st.markdown(f"*Professional CV rendered using {template_source}*")
             st.markdown("---")
             
-            # Display using the CVData format_for_preview method
-            formatted_cv = cv_data.format_for_preview()
+            # Display the template-rendered CV
             st.markdown(formatted_cv)
             
             st.markdown("---")
-            st.caption("🎯 Professional CV preview using structured data")
+            st.caption("🎯 Professional CV preview using Jinja2 templating engine")
             
-            # Add JSON view toggle
+            # Add structured data view toggle
             with st.expander("🔍 View Structured Data (JSON)", expanded=False):
-                st.json(cv_data.to_dict())
+                try:
+                    cv_data = convert_session_to_cvdata()
+                    st.json(cv_data.to_dict())
+                except:
+                    st.json({
+                        'contact': st.session_state.get('whole_cv_contact', {}),
+                        'llm_responses': st.session_state.get('llm_json_responses', {}),
+                        'individual_generations': st.session_state.get('individual_generations', {})
+                    })
+            
+            # Add template view toggle for developers
+            with st.expander("🔧 Template Engine Debug", expanded=False):
+                st.text(f"Template Source: {template_source}")
+                st.text("Available Templates:")
+                st.code("templates/cv_preview.md", language="text")
                 
     except Exception as e:
-        logger.error(f"Error in structured CV preview: {e}")
-        st.error(f"❌ Error generating structured preview: {str(e)}")
+        logger.error(f"Error in templated CV preview: {e}")
+        st.error(f"❌ Error generating templated preview: {str(e)}")
         # Fallback to original preview
         show_cv_preview()
 
 def generate_cv_pdf_structured():
-    """Generate CV PDF using structured CVData format"""
+    """Generate CV PDF using template engine and structured CVData format"""
     try:
         # Check if we have sufficient data
         if not st.session_state.get('whole_cv_contact') or not st.session_state.get('individual_generations'):
@@ -2238,21 +2325,28 @@ def generate_cv_pdf_structured():
         # Get PDF exporter
         pdf_exporter = get_pdf_exporter()
         
+        # Create PDF context using template engine
+        pdf_context = template_engine.create_pdf_context(cv_data)
+        
         # Check if the exporter has a method for structured data
         if hasattr(pdf_exporter, 'create_cv_from_structured_data'):
             # Use structured data method if available
             pdf_path = pdf_exporter.create_cv_from_structured_data(cv_data, color_scheme="teal")
         else:
-            # Fallback: convert structured data to formatted text and use existing method
-            formatted_content = cv_data.format_for_preview()
-            contact_dict = cv_data.contact.to_dict()
-            
+            # Use template engine to render content for PDF
             try:
+                # Option 1: Use PDF-specific template (no markdown formatting)
+                formatted_content = template_engine.render_cv_for_pdf(cv_data)
+                contact_dict = cv_data.contact.to_dict()
+                
                 pdf_path = pdf_exporter.create_direct_cv_pdf(
                     contact_dict, formatted_content, color_scheme="teal"
                 )
             except AttributeError:
-                # Use fallback method
+                # Option 2: Use fallback method with CVData preview
+                formatted_content = cv_data.format_for_preview()
+                contact_dict = cv_data.contact.to_dict()
+                
                 pdf_path = pdf_exporter.create_professional_cv_pdf(
                     formatted_content, contact_dict, color_scheme="teal"
                 )
@@ -2275,8 +2369,8 @@ def generate_cv_pdf_structured():
             return pdf_data
             
     except Exception as e:
-        logger.error(f"Structured PDF generation error: {e}")
-        st.error(f"❌ Error generating structured PDF: {str(e)}")
+        logger.error(f"Template-based PDF generation error: {e}")
+        st.error(f"❌ Error generating template-based PDF: {str(e)}")
         # Fallback to original method
         return generate_cv_pdf()
 
