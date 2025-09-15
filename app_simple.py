@@ -33,8 +33,7 @@ def initialize_session_state():
         'processed_documents': None,
         'vector_store': None,
         'style_profile': None,
-        'generated_cv': None,
-        'generated_cover_letter': None
+        'generated_cv': None
     }
     
     for key, value in defaults.items():
@@ -255,11 +254,16 @@ def main():
         
         st.divider()
         
-        generation_type = st.radio(
-            "What to Generate",
-            ["CV", "Cover Letter", "Both"],
-            help="Choose what to generate"
+        # Model selection dropdown
+        model_choice = st.selectbox(
+            "Select Model",
+            options=["gpt-4o-mini", "gpt-4o", "gpt-5"],
+            index=0,
+            help="gpt-4o-mini is fastest and cheapest, gpt-4o is high quality, gpt-5 is the most advanced"
         )
+        
+        # Store model choice in session state
+        st.session_state['selected_model'] = model_choice
     
     tab1, tab2, tab3 = st.tabs(["📄 Upload", "🤖 Generate", "💾 Download"])
     
@@ -268,12 +272,12 @@ def main():
     
     with tab2:
         if st.session_state.processed_documents:
-            handle_generation(generation_type)
+            handle_generation()
         else:
             st.info("👆 Please upload and process documents first")
     
     with tab3:
-        if st.session_state.generated_cv or st.session_state.generated_cover_letter:
+        if st.session_state.generated_cv:
             handle_download()
         else:
             st.info("👆 Please generate content first")
@@ -476,27 +480,22 @@ def handle_document_upload():
                 with st.expander("🔍 **Full Error Details**"):
                     st.code(traceback.format_exc())
 
-def handle_generation(generation_type):
-    st.header("🤖 Content Generation")
+def handle_generation():
+    st.header("🤖 CV Generation")
     
-    llm_service = get_llm_service()
+    # Get the LLM service with the selected model
+    model_choice = st.session_state.get('selected_model', 'gpt-4o-mini')
+    from services.llm import create_llm_service
+    llm_service = create_llm_service(model_choice)
+    
     retriever = create_rag_retriever(st.session_state.vector_store)
     context_builder = ContextBuilder(retriever)
     
-    if generation_type in ["CV", "Both"]:
-        st.subheader("📄 CV Generation")
-        
-        if st.button("🚀 Generate CV", type="primary"):
-            generate_cv(llm_service, context_builder)
+    st.subheader("📄 CV Generation")
+    st.info(f"Using model: **{model_choice}**")
     
-    if generation_type in ["Cover Letter", "Both"]:
-        st.subheader("📝 Cover Letter Generation")
-        
-        company_name = st.text_input("Company Name (optional)", placeholder="e.g., TechCorp Inc.")
-        role_title = st.text_input("Role Title (optional)", placeholder="e.g., Senior Software Engineer")
-        
-        if st.button("🚀 Generate Cover Letter", type="primary"):
-            generate_cover_letter(llm_service, context_builder, company_name, role_title)
+    if st.button("🚀 Generate CV", type="primary"):
+        generate_cv(llm_service, context_builder)
 
 def generate_cv(llm_service, context_builder):
     with st.spinner("Generating CV..."):
@@ -748,45 +747,6 @@ def generate_cv(llm_service, context_builder):
             with st.expander("🔍 **Full Error Details**"):
                 st.code(traceback.format_exc())
 
-def generate_cover_letter(llm_service, context_builder, company_name, role_title):
-    with st.spinner("Generating cover letter..."):
-        try:
-            context = context_builder.build_cover_letter_context(company_name)
-            
-            # Simple prompt for cover letter
-            cover_letter_prompt = f"""Generate a professional cover letter for the job application.
-            Company: {company_name or '[Company Name]'}
-            Role: {role_title or '[Job Title]'}
-            
-            Make it engaging, professional, and tailored to the job requirements.
-            Keep it concise and impactful."""
-            
-            result = llm_service.generate_cover_letter(cover_letter_prompt, context)
-            
-            st.session_state.generated_cover_letter = result["content"]
-            st.success("✅ Cover Letter generated successfully!")
-            
-            # Cover Letter with progressive disclosure
-            st.subheader("📝 Generated Cover Letter")
-            
-            with st.expander("📄 **Cover Letter Content**", expanded=True):
-                st.text_area("Cover Letter Content", result["content"], height=300, key="cover_letter_preview")
-            
-            with st.expander("📊 **Cover Letter Metrics**", expanded=False):
-                cl_col1, cl_col2, cl_col3 = st.columns(3)
-                with cl_col1:
-                    st.metric("Word Count", result.get("word_count", len(result["content"].split())))
-                with cl_col2:
-                    st.metric("Character Count", len(result["content"]))
-                with cl_col3:
-                    valid_status = "✅ Valid" if result.get("valid", True) else "⚠️ Review Needed"
-                    st.metric("Status", valid_status)
-            
-        except Exception as e:
-            st.error(f"❌ **Cover Letter Generation Failed**")
-            st.error(f"**Error Details:** {str(e)}")
-            with st.expander("🔍 **Full Error Details**"):
-                st.code(traceback.format_exc())
 
 def handle_download():
     st.header("💾 Download PDF")
@@ -874,27 +834,6 @@ def handle_download():
                     
                     st.success("✅ CV PDF generated successfully!")
         
-        if st.session_state.generated_cover_letter:
-            if st.button("📝 Download Cover Letter as PDF"):
-                with st.spinner("Generating PDF..."):
-                    pdf_path = f"outputs/cover_letter_{timestamp}.pdf"
-                    
-                    pdf_exporter.export_cover_letter_to_pdf(
-                        st.session_state.generated_cover_letter,
-                        pdf_path,
-                        "Professional Application"
-                    )
-                    
-                    # Provide download button
-                    with open(pdf_path, 'rb') as f:
-                        st.download_button(
-                            label="⬇️ Download Cover Letter PDF",
-                            data=f.read(),
-                            file_name=f"cover_letter_{timestamp}.pdf",
-                            mime="application/pdf"
-                        )
-                    
-                    st.success("✅ Cover Letter PDF generated successfully!")
     
     except Exception as e:
         st.error(f"❌ **PDF Generation Failed**")

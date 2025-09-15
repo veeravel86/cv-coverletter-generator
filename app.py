@@ -28,7 +28,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 st.set_page_config(
-    page_title="CV & Cover Letter Generator",
+    page_title="CV Generator",
     page_icon="📄",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -40,7 +40,6 @@ def initialize_session_state():
         'vector_store': None,
         'style_profile': None,
         'generated_cv': None,
-        'generated_cover_letter': None,
         'validation_results': {},
         'export_paths': {},
         'sample_cv_content': None,
@@ -56,8 +55,8 @@ def initialize_session_state():
 def main():
     initialize_session_state()
     
-    st.title("🎯 CV & Cover Letter Generator")
-    st.markdown("**Upload PDFs → Generate ATS-Optimized CV Package → Export in Multiple Formats**")
+    st.title("🎯 CV Generator")
+    st.markdown("**Upload PDFs → Generate ATS-Optimized CV → Export in Multiple Formats**")
     
     with st.sidebar:
         st.header("📋 Configuration")
@@ -71,11 +70,8 @@ def main():
         
         st.divider()
         
-        generation_mode = st.radio(
-            "Generation Mode",
-            ["Cover Letter"],
-            help="Individual CV sections and complete CV generation available in Generate tab"
-        )
+        # Remove cover letter option - CV generation only
+        generation_mode = None  # Not used anymore - CV only
         
     
     tab1, tab2 = st.tabs(["📄 Upload & Process", "🤖 Generate"])
