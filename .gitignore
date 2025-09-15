@@ -93,3 +93,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Local defaults (not tracked in git)
+local_defaults/

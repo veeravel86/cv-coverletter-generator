@@ -21,6 +21,7 @@ from utils.style import StyleApplicator
 from models.cv_data import CVData, ContactInfo, RoleExperience, ExperienceBullet
 from services.template_engine import template_engine
 from services.sample_cv_parser import parse_and_cache_sample_cv
+from services.defaults_loader import defaults_loader
 
 load_dotenv()
 
@@ -51,6 +52,34 @@ def initialize_session_state():
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+
+def load_defaults():
+    """Load default documents and processed data"""
+    try:
+        with st.spinner("Loading defaults..."):
+            # Load processed data if available
+            processed_data = defaults_loader.load_processed_data("last_processed")
+            style_profile = defaults_loader.load_processed_data("last_style_profile")
+            
+            if processed_data:
+                st.session_state.processed_documents = processed_data
+                st.session_state.vector_store = processed_data.get("vector_store")
+                
+                # Load sample CV content
+                if "texts" in processed_data and "sample_cv" in processed_data["texts"]:
+                    st.session_state.sample_cv_content = processed_data["texts"]["sample_cv"]
+                
+                if style_profile:
+                    st.session_state.style_profile = style_profile
+                
+                st.success(f"✅ Loaded defaults with {processed_data.get('doc_count', 0)} documents!")
+                st.rerun()
+            else:
+                st.warning("No processed defaults found. Please upload and process documents first.")
+                
+    except Exception as e:
+        st.error(f"❌ Failed to load defaults: {e}")
+        logger.error(f"Load defaults error: {e}")
 
 def main():
     initialize_session_state()
@@ -83,6 +112,26 @@ def main():
         
         # Show current model status
         st.info(f"🤖 Current model: **{model_choice}**")
+        
+        st.divider()
+        
+        # Local Defaults Section
+        st.header("💾 Local Defaults")
+        defaults_status = defaults_loader.get_status()
+        
+        if defaults_status["has_defaults"]:
+            st.success(f"📁 {defaults_status['default_files_count']} files | 🔄 {defaults_status['processed_data_count']} processed")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔄 Load Defaults"):
+                    load_defaults()
+            with col2:
+                if st.button("🗑️ Clear Defaults"):
+                    defaults_loader.clear_defaults()
+                    st.rerun()
+        else:
+            st.info("No defaults saved yet. Upload documents and they'll be saved automatically for next time.")
         
         # Remove cover letter option - CV generation only
         generation_mode = None  # Not used anymore - CV only
@@ -192,6 +241,19 @@ def handle_document_upload():
                     st.session_state.style_profile = style_profile
                 
                 st.success(f"✅ Processed {processed_data['doc_count']} documents successfully!")
+                
+                # Save uploaded files as defaults for future use
+                try:
+                    uploaded_files_list = [f for f in uploaded_files.values() if f is not None]
+                    if uploaded_files_list:
+                        defaults_loader.save_uploaded_files(uploaded_files_list)
+                        # Save processed data too
+                        defaults_loader.save_processed_data("last_processed", processed_data)
+                        if st.session_state.get('style_profile'):
+                            defaults_loader.save_processed_data("last_style_profile", st.session_state.style_profile)
+                        st.success("💾 Saved as defaults for future sessions!")
+                except Exception as e:
+                    logger.warning(f"Failed to save defaults: {e}")
                 
                 # Show extracted content with progressive disclosure
                 st.markdown("---")
