@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from services.ingest import get_pdf_ingestor
 from services.rag import create_rag_retriever, ContextBuilder
-from services.llm import get_llm_service
+from services.llm import create_llm_service
 from services.style_extract import get_style_extractor
 from exporters.markdown_export import get_markdown_exporter
 from exporters.docx_export import get_docx_exporter
@@ -69,6 +69,20 @@ def main():
             st.success("✅ OpenAI API key loaded")
         
         st.divider()
+        
+        # Model selection
+        model_choice = st.selectbox(
+            "Select Model",
+            options=["gpt-4o-mini", "gpt-4o", "gpt-5"],
+            index=0,
+            help="gpt-4o-mini is fastest and cheapest, gpt-4o is high quality, gpt-5 is the most advanced"
+        )
+        
+        # Store model choice in session state
+        st.session_state['selected_model'] = model_choice
+        
+        # Show current model status
+        st.info(f"🤖 Current model: **{model_choice}**")
         
         # Remove cover letter option - CV generation only
         generation_mode = None  # Not used anymore - CV only
@@ -242,7 +256,9 @@ def handle_generation(generation_mode):
         st.error("❌ No processed documents found")
         return
     
-    llm_service = get_llm_service()
+    # Get the selected model from session state
+    model_choice = st.session_state.get('selected_model', 'gpt-4o-mini')
+    llm_service = create_llm_service(model_choice)
     retriever = create_rag_retriever(st.session_state.vector_store)
     context_builder = ContextBuilder(retriever)
     
