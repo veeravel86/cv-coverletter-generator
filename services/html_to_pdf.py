@@ -130,100 +130,101 @@ class HTMLToPDFConverter:
         
         body {
             font-family: 'Arial', 'Helvetica', sans-serif;
-            line-height: 1.6;
+            line-height: 1.4;
             color: #333;
             background: white;
-            font-size: 11pt;
+            font-size: 10pt;
         }
         
         .cv-container {
             max-width: 8.5in;
             margin: 0 auto;
-            padding: 0.25in;
+            padding: 0.15in;
             background: white;
         }
         
         /* Header Styling */
         h1 {
-            font-size: 24pt;
+            font-size: 20pt;
             font-weight: bold;
-            color: #2c3e50;
+            color: #0077b5;
             text-align: center;
-            margin-bottom: 8pt;
-            border-bottom: 2px solid #3498db;
-            padding-bottom: 6pt;
+            margin-bottom: 4pt;
+            border-bottom: 2px solid #0077b5;
+            padding-bottom: 4pt;
         }
         
         /* Contact Info */
         .contact-info {
             text-align: center;
-            margin-bottom: 16pt;
+            margin-bottom: 8pt;
             color: #555;
-            font-size: 8pt;
+            font-size: 7pt;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
         
         .contact-info span {
-            margin: 0 8pt;
+            margin: 0 4pt;
         }
         
         /* Section Headers */
         h2 {
-            font-size: 14pt;
+            font-size: 12pt;
             font-weight: bold;
-            color: #2c3e50;
-            margin-top: 20pt;
-            margin-bottom: 8pt;
-            border-bottom: 1px solid #bdc3c7;
-            padding-bottom: 4pt;
+            color: #0077b5;
+            margin-top: 10pt;
+            margin-bottom: 4pt;
+            border-bottom: 1px solid #0077b5;
+            padding-bottom: 2pt;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
         }
         
         h3 {
-            font-size: 12pt;
+            font-size: 11pt;
             font-weight: bold;
-            color: #34495e;
-            margin-top: 12pt;
-            margin-bottom: 4pt;
+            color: #0077b5;
+            margin-top: 6pt;
+            margin-bottom: 2pt;
         }
         
         /* Professional Summary */
         .executive-summary {
             font-style: italic;
             background: #f8f9fa;
-            padding: 12pt;
-            border-left: 4px solid #3498db;
-            margin-bottom: 16pt;
-            border-radius: 4px;
+            padding: 6pt;
+            border-left: 3px solid #0077b5;
+            margin-bottom: 8pt;
+            border-radius: 2px;
+            color: #000000;
         }
         
         /* Core Skills */
         .core-skills {
             display: flex;
             flex-wrap: wrap;
-            gap: 4pt;
-            margin-bottom: 16pt;
-            line-height: 1.2;
+            gap: 2pt;
+            margin-bottom: 8pt;
+            line-height: 1.1;
         }
         
         .skill-tag {
-            background: #ecf0f1;
-            color: #2c3e50;
+            background: #e1f5fe;
+            color: #0077b5;
             padding: 2pt 6pt;
             border-radius: 8pt;
             font-size: 7.5pt;
             font-weight: bold;
             display: inline-block;
-            border: 1px solid #bdc3c7;
+            border: 1px solid #0077b5;
             box-shadow: 0 1pt 2pt rgba(0,0,0,0.1);
         }
         
         /* Experience Section */
         .experience-item {
-            margin-bottom: 16pt;
+            margin-bottom: 8pt;
             page-break-inside: avoid;
         }
         
@@ -237,18 +238,18 @@ class HTMLToPDFConverter:
         .role-title {
             font-weight: bold;
             font-size: 12pt;
-            color: #2c3e50;
+            color: #0077b5;
         }
         
         .role-dates {
-            font-size: 10pt;
+            font-size: 9pt;
             color: #7f8c8d;
             font-style: italic;
         }
         
         .company-name {
             font-size: 11pt;
-            color: #34495e;
+            color: #0077b5;
             margin-bottom: 6pt;
         }
         
@@ -256,18 +257,19 @@ class HTMLToPDFConverter:
         ul {
             list-style: none;
             padding-left: 0;
-            margin: 8pt 0;
+            margin: 4pt 0;
         }
         
         li {
-            margin-bottom: 4pt;
-            padding-left: 16pt;
+            margin-bottom: 2pt;
+            padding-left: 12pt;
             position: relative;
+            color: #000000;
         }
         
         li:before {
             content: "•";
-            color: #3498db;
+            color: #0077b5;
             font-weight: bold;
             position: absolute;
             left: 0;
@@ -275,16 +277,16 @@ class HTMLToPDFConverter:
         
         /* Bold headers in bullets - shaded like skill tags */
         li strong {
-            background: #ecf0f1;
-            color: #2c3e50;
-            padding: 2pt 6pt;
-            border-radius: 6pt;
-            font-size: 9pt;
+            background: #e1f5fe;
+            color: #0077b5;
+            padding: 1pt 4pt;
+            border-radius: 4pt;
+            font-size: 8pt;
             font-weight: bold;
             display: inline-block;
-            border: 1px solid #bdc3c7;
+            border: 1px solid #0077b5;
             box-shadow: 0 1pt 2pt rgba(0,0,0,0.1);
-            margin-right: 6pt;
+            margin-right: 4pt;
         }
         
         /* Tables */

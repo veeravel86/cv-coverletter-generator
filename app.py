@@ -1829,8 +1829,41 @@ def format_previous_experience(prev_exp_text):
     if not prev_exp_text:
         return ""
     
-    # This would parse the previous experience and format it concisely
-    cleaned = clean_generated_content(prev_exp_text)
+    # Special formatting for previous roles - remove pipe symbols and bold from bullets
+    lines = prev_exp_text.split('\n')
+    formatted_lines = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            formatted_lines.append("")
+            continue
+            
+        # Check if this is a bullet point (starts with - or •)
+        if line.startswith('- ') or line.startswith('• '):
+            # Remove the bullet marker temporarily
+            bullet_marker = line[:2]
+            content = line[2:].strip()
+            
+            # Remove bold formatting and pipe symbol from bullet content
+            # Pattern: **Something** | rest of content -> just the full content
+            if '**' in content and '|' in content:
+                # Remove all ** markers
+                content = content.replace('**', '')
+                # Remove the pipe and clean up spacing
+                if '|' in content:
+                    parts = content.split('|', 1)
+                    if len(parts) == 2:
+                        # Combine without pipe, just a space
+                        content = f"{parts[0].strip()} - {parts[1].strip()}"
+            
+            # Add back the bullet marker with cleaned content
+            formatted_lines.append(f"{bullet_marker}{content}")
+        else:
+            # Keep other lines as-is (headers, role titles, etc.)
+            formatted_lines.append(line)
+    
+    cleaned = '\n'.join(formatted_lines)
     
     return f"\n\n**Previous Roles**\n\n{cleaned}"
 
@@ -2305,10 +2338,27 @@ def convert_session_to_cvdata() -> CVData:
                     else:
                         bullets.append(ExperienceBullet(heading="Action", content=bullet_text))
             
+            # Try to get company info from parsed sample CV JSON first
+            company_name = role_data.get('company_name', 'Company')
+            location = role_data.get('location', 'Location')
+            job_title = role_data.get('position_name', 'Current Position')
+            
+            # Override with sample CV data if available
+            if 'sample_cv_json' in st.session_state and st.session_state.get('sample_cv_parsed'):
+                sample_cv_data = st.session_state.sample_cv_json
+                if sample_cv_data and 'experience' in sample_cv_data:
+                    experiences = sample_cv_data['experience']
+                    if experiences and len(experiences) > 0:
+                        # Get the first (most recent) experience entry
+                        current_exp = experiences[0]
+                        company_name = current_exp.get('company', company_name)
+                        location = current_exp.get('location', location)
+                        job_title = current_exp.get('position', job_title)
+            
             current_role = RoleExperience(
-                job_title=role_data.get('position_name', 'Current Position'),
-                company=role_data.get('company_name', 'Company'),
-                location=role_data.get('location', 'Location'),
+                job_title=job_title,
+                company=company_name,
+                location=location,
                 start_date=role_data.get('start_date', 'Present'),
                 end_date=role_data.get('end_date', 'Present'),
                 bullets=bullets
@@ -2329,10 +2379,27 @@ def convert_session_to_cvdata() -> CVData:
                         heading = ' '.join(heading_words)
                         bullets.append(ExperienceBullet(heading=heading, content=content))
             
+            # Try to get company info from parsed sample CV JSON
+            company_name = 'Company'
+            location = 'Location'
+            job_title = 'Current Position'
+            
+            # Override with sample CV data if available
+            if 'sample_cv_json' in st.session_state and st.session_state.get('sample_cv_parsed'):
+                sample_cv_data = st.session_state.sample_cv_json
+                if sample_cv_data and 'experience' in sample_cv_data:
+                    experiences = sample_cv_data['experience']
+                    if experiences and len(experiences) > 0:
+                        # Get the first (most recent) experience entry
+                        current_exp = experiences[0]
+                        company_name = current_exp.get('company', company_name)
+                        location = current_exp.get('location', location)
+                        job_title = current_exp.get('position', job_title)
+            
             current_role = RoleExperience(
-                job_title='Current Position',
-                company='Company',
-                location='Location',
+                job_title=job_title,
+                company=company_name,
+                location=location,
                 start_date='Present',
                 end_date='Present',
                 bullets=bullets
@@ -2340,10 +2407,26 @@ def convert_session_to_cvdata() -> CVData:
     
     if not current_role:
         # Create empty current role if none exists
+        # Try to get info from sample CV JSON first
+        company_name = 'Company Name'
+        location = 'City, Country'
+        job_title = 'Position Title'
+        
+        if 'sample_cv_json' in st.session_state and st.session_state.get('sample_cv_parsed'):
+            sample_cv_data = st.session_state.sample_cv_json
+            if sample_cv_data and 'experience' in sample_cv_data:
+                experiences = sample_cv_data['experience']
+                if experiences and len(experiences) > 0:
+                    # Get the first (most recent) experience entry
+                    current_exp = experiences[0]
+                    company_name = current_exp.get('company', company_name)
+                    location = current_exp.get('location', location)
+                    job_title = current_exp.get('position', job_title)
+        
         current_role = RoleExperience(
-            job_title='Position Title',
-            company='Company Name',
-            location='City, Country',
+            job_title=job_title,
+            company=company_name,
+            location=location,
             start_date='MMM YYYY',
             end_date='Present',
             bullets=[]
