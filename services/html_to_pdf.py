@@ -130,73 +130,80 @@ class HTMLToPDFConverter:
         
         body {
             font-family: 'Arial', 'Helvetica', sans-serif;
-            line-height: 1.4;
+            line-height: 1.2;
             color: #333;
             background: white;
-            font-size: 10pt;
+            font-size: 9pt;
         }
         
         .cv-container {
             max-width: 8.5in;
             margin: 0 auto;
-            padding: 0.15in;
+            padding: 0.1in;
             background: white;
         }
         
         /* Header Styling */
         h1 {
-            font-size: 20pt;
+            font-size: 18pt;
             font-weight: bold;
             color: #0077b5;
             text-align: center;
-            margin-bottom: 4pt;
+            margin-bottom: 2pt;
             border-bottom: 2px solid #0077b5;
-            padding-bottom: 4pt;
+            padding-bottom: 2pt;
         }
         
         /* Contact Info */
         .contact-info {
             text-align: center;
-            margin-bottom: 8pt;
+            margin-bottom: 4pt;
             color: #555;
-            font-size: 7pt;
+            font-size: 5pt;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
         
         .contact-info span {
-            margin: 0 4pt;
+            margin: 0 2pt;
+        }
+        
+        /* Prevent contact info from getting bullet points */
+        .contact-info:before,
+        .contact-info li:before,
+        p.contact-info:before {
+            content: none !important;
         }
         
         /* Section Headers */
         h2 {
-            font-size: 12pt;
-            font-weight: bold;
-            color: #0077b5;
-            margin-top: 10pt;
-            margin-bottom: 4pt;
-            border-bottom: 1px solid #0077b5;
-            padding-bottom: 2pt;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        h3 {
             font-size: 11pt;
             font-weight: bold;
             color: #0077b5;
             margin-top: 6pt;
             margin-bottom: 2pt;
+            border-bottom: 1px solid #0077b5;
+            padding-bottom: 1pt;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        h3 {
+            font-size: 10pt;
+            font-weight: bold;
+            color: #0077b5;
+            margin-top: 4pt;
+            margin-bottom: 1pt;
         }
         
         /* Professional Summary */
         .executive-summary {
             font-style: italic;
             background: #f8f9fa;
-            padding: 6pt;
+            padding: 4pt;
             border-left: 3px solid #0077b5;
-            margin-bottom: 8pt;
+            margin-bottom: 4pt;
             border-radius: 2px;
             color: #000000;
         }
@@ -205,9 +212,9 @@ class HTMLToPDFConverter:
         .core-skills {
             display: flex;
             flex-wrap: wrap;
-            gap: 2pt;
-            margin-bottom: 8pt;
-            line-height: 1.1;
+            gap: 1pt;
+            margin-bottom: 4pt;
+            line-height: 1.0;
         }
         
         .skill-tag {
@@ -224,7 +231,7 @@ class HTMLToPDFConverter:
         
         /* Experience Section */
         .experience-item {
-            margin-bottom: 8pt;
+            margin-bottom: 4pt;
             page-break-inside: avoid;
         }
         
@@ -232,36 +239,36 @@ class HTMLToPDFConverter:
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 4pt;
+            margin-bottom: 2pt;
         }
         
         .role-title {
             font-weight: bold;
-            font-size: 12pt;
+            font-size: 11pt;
             color: #0077b5;
         }
         
         .role-dates {
-            font-size: 9pt;
+            font-size: 8pt;
             color: #7f8c8d;
             font-style: italic;
         }
         
         .company-name {
-            font-size: 11pt;
+            font-size: 10pt;
             color: #0077b5;
-            margin-bottom: 6pt;
+            margin-bottom: 2pt;
         }
         
         /* Bullet Points */
         ul {
             list-style: none;
             padding-left: 0;
-            margin: 4pt 0;
+            margin: 2pt 0;
         }
         
         li {
-            margin-bottom: 2pt;
+            margin-bottom: 1pt;
             padding-left: 12pt;
             position: relative;
             color: #000000;
@@ -287,6 +294,7 @@ class HTMLToPDFConverter:
             border: 1px solid #0077b5;
             box-shadow: 0 1pt 2pt rgba(0,0,0,0.1);
             margin-right: 4pt;
+            white-space: nowrap;
         }
         
         /* Tables */

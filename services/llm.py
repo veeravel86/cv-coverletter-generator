@@ -97,17 +97,30 @@ class CVPackageValidator:
         }
 
 class OpenAILLMService:
+    @staticmethod
+    def _get_model_compatible_params_static(model: str, max_tokens: int) -> Dict[str, Any]:
+        """Get model-compatible parameters for OpenAI API calls"""
+        # GPT-5 and newer models use max_completion_tokens
+        if model in ["gpt-5"]:
+            return {"max_completion_tokens": max_tokens}
+        else:
+            return {"max_tokens": max_tokens}
+    
     def __init__(self, api_key: str, config: LLMConfig = None):
         self.client = OpenAI(api_key=api_key)
         self.config = config or LLMConfig(model=ModelType.GPT_4O_MINI)
         self.validator = CVPackageValidator()
         
-        self.langchain_llm = ChatOpenAI(
-            model=self.config.model.value,
-            temperature=self.config.temperature,
-            max_tokens=self.config.max_tokens,
-            openai_api_key=api_key
-        )
+        # Initialize LangChain OpenAI with model-compatible parameters
+        token_params = self._get_model_compatible_params_static(self.config.model.value, self.config.max_tokens)
+        langchain_params = {
+            "model": self.config.model.value,
+            "temperature": self.config.temperature,
+            "openai_api_key": api_key
+        }
+        langchain_params.update(token_params)
+        
+        self.langchain_llm = ChatOpenAI(**langchain_params)
     
     def _get_model_compatible_params(self, model: str, max_tokens: int) -> Dict[str, Any]:
         """Get model-compatible parameters for OpenAI API calls"""

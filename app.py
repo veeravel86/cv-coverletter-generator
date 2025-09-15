@@ -1845,17 +1845,37 @@ def format_previous_experience(prev_exp_text):
             bullet_marker = line[:2]
             content = line[2:].strip()
             
-            # Remove bold formatting and pipe symbol from bullet content
-            # Pattern: **Something** | rest of content -> just the full content
-            if '**' in content and '|' in content:
-                # Remove all ** markers
-                content = content.replace('**', '')
-                # Remove the pipe and clean up spacing
-                if '|' in content:
-                    parts = content.split('|', 1)
-                    if len(parts) == 2:
-                        # Combine without pipe, just a space
-                        content = f"{parts[0].strip()} - {parts[1].strip()}"
+            # Comprehensive removal of all bold formatting and pipe symbols
+            # Remove all ** markdown bold markers
+            content = content.replace('**', '')
+            
+            # Remove all <strong> HTML bold tags
+            import re
+            content = re.sub(r'</?strong>', '', content)
+            
+            # Remove all <b> HTML bold tags
+            content = re.sub(r'</?b>', '', content)
+            
+            # Handle pipe symbol removal - always remove pipe and join content properly
+            if '|' in content:
+                parts = content.split('|', 1)
+                if len(parts) == 2:
+                    # Join the parts with a simple space or dash
+                    first_part = parts[0].strip()
+                    second_part = parts[1].strip()
+                    
+                    # If second part starts with a lowercase letter, use space
+                    # If it starts with uppercase, use dash for better readability
+                    if second_part and second_part[0].islower():
+                        content = f"{first_part} {second_part}"
+                    else:
+                        content = f"{first_part} - {second_part}"
+                else:
+                    # Just remove the pipe if it doesn't split properly
+                    content = content.replace('|', ' ')
+            
+            # Clean up any double spaces
+            content = ' '.join(content.split())
             
             # Add back the bullet marker with cleaned content
             formatted_lines.append(f"{bullet_marker}{content}")
