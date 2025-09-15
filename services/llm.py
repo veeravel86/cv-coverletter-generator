@@ -25,6 +25,13 @@ class LLMConfig:
     max_tokens: int = 4000
     retry_attempts: int = 3
     retry_delay: float = 1.0
+    
+    def get_temperature(self) -> float:
+        """Get temperature value compatible with the model"""
+        # GPT-5 only supports default temperature (1.0)
+        if self.model == ModelType.GPT_5:
+            return 1.0
+        return self.temperature
 
 class CVPackageValidator:
     @staticmethod
@@ -115,7 +122,7 @@ class OpenAILLMService:
         token_params = self._get_model_compatible_params_static(self.config.model.value, self.config.max_tokens)
         langchain_params = {
             "model": self.config.model.value,
-            "temperature": self.config.temperature,
+            "temperature": self.config.get_temperature(),
             "openai_api_key": api_key
         }
         langchain_params.update(token_params)
@@ -145,7 +152,7 @@ class OpenAILLMService:
                 response = self.client.chat.completions.create(
                     model=self.config.model.value,
                     messages=formatted_messages,
-                    temperature=self.config.temperature,
+                    temperature=self.config.get_temperature(),
                     **token_params
                 )
                 

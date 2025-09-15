@@ -29,6 +29,13 @@ class PDFIngestor:
         self.vector_store: Optional[FAISS] = None
         self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     
+    def _get_compatible_temperature(self, model: str, desired_temperature: float) -> float:
+        """Get temperature value compatible with the model"""
+        # GPT-5 only supports default temperature (1.0)
+        if model == "gpt-5":
+            return 1.0
+        return desired_temperature
+    
     def _get_model_compatible_params(self, model: str, max_tokens: int) -> Dict[str, Any]:
         """Get model-compatible parameters for OpenAI API calls"""
         # GPT-5 and newer models use max_completion_tokens
@@ -117,7 +124,7 @@ Raw LinkedIn export text to process:
                     {"role": "system", "content": "You are a specialized text extraction expert. Your job is to extract ONLY pure job description content from noisy LinkedIn page exports. Be extremely thorough in removing LinkedIn interface noise while preserving all job-relevant information."},
                     {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
                 ],
-                temperature=0.0,  # Use 0.0 for more consistent extraction
+                temperature=self._get_compatible_temperature(model, 0.0),  # Use 0.0 for more consistent extraction
                 **token_params
             )
             
@@ -178,7 +185,7 @@ Raw CV text to process:
                     {"role": "system", "content": "You are a formatting assistant. Your only job is to organize content under headings without changing, removing, or modifying any information. Preserve all content exactly as provided."},
                     {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
                 ],
-                temperature=0.0,  # Reduced for more consistent formatting
+                temperature=self._get_compatible_temperature(model, 0.0),  # Reduced for more consistent formatting
                 **token_params
             )
             
@@ -249,7 +256,7 @@ Raw experience text to process:
                     {"role": "system", "content": "You are a formatting assistant. Your ONLY job is to organize content while preserving ALL existing headings and content EXACTLY as written. Do not change, remove, or modify any content - only organize it while maintaining original structure and headings."},
                     {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
                 ],
-                temperature=0.0,  # Set to 0 for maximum consistency
+                temperature=self._get_compatible_temperature(model, 0.0),  # Set to 0 for maximum consistency
                 **token_params
             )
             
@@ -312,7 +319,7 @@ Raw skills text to process:
                     {"role": "system", "content": "You are a formatting assistant. Your ONLY job is to organize content under headings. You must preserve ALL information exactly as provided. Do not change, remove, or modify any content - only organize it under appropriate headings."},
                     {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
                 ],
-                temperature=0.0,  # Set to 0 for maximum consistency
+                temperature=self._get_compatible_temperature(model, 0.0),  # Set to 0 for maximum consistency
                 **token_params
             )
             
@@ -367,7 +374,7 @@ Raw experience text to process:
                     {"role": "system", "content": "You are a formatting assistant. Organize work experience content under headings without changing any information. Preserve all content exactly as provided."},
                     {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
                 ],
-                temperature=0.0,
+                temperature=self._get_compatible_temperature(model, 0.0),
                 **token_params
             )
             
@@ -420,7 +427,7 @@ Raw skills text to process:
                     {"role": "system", "content": "You are a formatting assistant. Organize skills content under headings without changing any information. Preserve all content exactly as provided."},
                     {"role": "user", "content": f"{prompt}\n\n{raw_text}"}
                 ],
-                temperature=0.0,
+                temperature=self._get_compatible_temperature(model, 0.0),
                 **token_params
             )
             

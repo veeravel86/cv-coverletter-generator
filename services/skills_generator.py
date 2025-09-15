@@ -15,6 +15,13 @@ class SkillsGenerationConfig:
     temperature: float = 0.1
     max_tokens: int = 1000
     model: str = "gpt-4o-mini"  # Can be gpt-4o-mini, gpt-4o, or gpt-5
+    
+    def get_temperature(self) -> float:
+        """Get temperature value compatible with the model"""
+        # GPT-5 only supports default temperature (1.0)
+        if self.model == "gpt-5":
+            return 1.0
+        return self.temperature
 
 class SkillsGenerator:
     def __init__(self, config: SkillsGenerationConfig = None):
@@ -51,7 +58,7 @@ class SkillsGenerator:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=self.config.temperature,
+                temperature=self.config.get_temperature(),
                 **token_params
             )
             
